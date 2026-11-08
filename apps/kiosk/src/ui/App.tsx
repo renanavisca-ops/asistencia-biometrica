@@ -8,7 +8,8 @@ import { Camera } from './Camera.tsx';
 
 type View =
   | { name: 'loading' } | { name: 'setup' } | { name: 'home' } | { name: 'capture' }
-  | { name: 'result'; result: PunchResult } | { name: 'blocked' };
+  | { name: 'result'; result: PunchResult } | { name: 'blocked' }
+  | { name: 'confirm'; employeeId: string; result: Extract<PunchResult, { kind: 'confirm_early_out' }> };
 
 const fmtTime = (ms: number, tz: string) => new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: tz }).format(new Date(ms));
 const REFUSED: Record<string, string> = {
@@ -65,13 +66,19 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
     return () => clearTimeout(t);
   }, [view, st]);
   useEffect(() => {
+    if (view.name !== 'confirm') return;
+    const t = setTimeout(() => setView({ name: 'home' }), 12_000); // sin respuesta: no se registra nada
+    return () => clearTimeout(t);
+  }, [view]);
+  useEffect(() => {
     if (view.name !== 'capture') return;
     const t = setTimeout(() => setView({ name: 'home' }), 45_000); // inactividad
     return () => clearTimeout(t);
   }, [view]);
 
-  const punch = async (employeeId: string) => {
-    const result = await svc.punch(simulatedIdentification(employeeId));
+  const punch = async (employeeId: string, confirmEarlyOut = false) => {
+    const result = await svc.punch(simulatedIdentification(employeeId), { confirmEarlyOut });
+    if (result.kind === 'confirm_early_out') { setView({ name: 'confirm', employeeId, result }); return; }
     setView({ name: 'result', result });
     refresh();
     if (result.kind === 'recorded') runSync();
@@ -120,6 +127,17 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
         </div>
       )}
       {view.name === 'result' && <Result r={view.result} tz={st?.timezone ?? 'UTC'} />}
+      {view.name === 'confirm' && (
+        <div className="screen full warn" role="alertdialog" aria-live="assertive" aria-label="Confirmar salida">
+          <div style={{ fontSize: 28 }}>{view.result.displayName}</div>
+          <div className="big" style={{ fontSize: 34 }}>Entró hace {view.result.minutesSince < 1 ? 'menos de 1 minuto' : `${view.result.minutesSince} min`}</div>
+          <p style={{ fontSize: 22, margin: 0 }}>(a las {fmtTime(view.result.inAtMs, st?.timezone ?? 'UTC')})</p>
+          <p style={{ fontSize: 24 }}>¿Desea registrar su <b>SALIDA</b> ahora?</p>
+          <button className="btn" style={{ background: 'var(--out)', color: '#fff', fontSize: 26 }} onClick={() => punch(view.employeeId, true)}>Sí, registrar SALIDA</button>
+          <button className="btn" style={{ background: '#111', color: '#fff' }} onClick={() => setView({ name: 'home' })}>No, fue un error</button>
+          <p style={{ fontSize: 14 }}>Si no responde, no se registra nada.</p>
+        </div>
+      )}
       {footer}
       {admin && st && (
         <div className="overlay" role="dialog" aria-label="Estado del dispositivo">
@@ -181,6 +199,7 @@ function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
 }
 
 function Result({ r, tz }: { r: PunchResult; tz: string }) {
+  if (r.kind === 'confirm_early_out') return null; // se muestra en la pantalla de confirmación
   if (r.kind === 'recorded') {
     return (
       <div className={`screen full ${r.eventType === 'IN' ? 'ok-in' : 'ok-out'}`} role="status" aria-live="assertive">

@@ -21,6 +21,8 @@ export interface Identification {
 export type PunchResult =
   | { kind: 'recorded'; eventType: EventType; displayName: string; at: number; flags: string[]; synced: false }
   | { kind: 'duplicate'; eventType: EventType; displayName: string; secondsSince: number }
+  /** Salida antes del tiempo mínimo: la app debe preguntar y, si confirma, llamar a punch(id, { confirmEarlyOut: true }). */
+  | { kind: 'confirm_early_out'; displayName: string; minutesSince: number; inAtMs: number }
   | { kind: 'refused'; reason: 'not_activated' | 'blocked' | 'unknown_employee' | 'lease_expired' | 'offline_too_long' | 'storage_error' };
 
 export type SyncResult =
@@ -71,7 +73,7 @@ export class KioskService {
   }
 
   /** Registra una marcación tras identificar a la persona. Todo ocurre localmente, sin red. */
-  async punch(id: Identification): Promise<PunchResult> {
+  async punch(id: Identification, opts: { confirmEarlyOut?: boolean } = {}): Promise<PunchResult> {
     const st = await this.store.getState();
     if (!st) return { kind: 'refused', reason: 'not_activated' };
     if (st.status !== 'active') return { kind: 'refused', reason: 'blocked' };
@@ -95,7 +97,10 @@ export class KioskService {
       ? { id: local.id, eventType: local.eventType, occurredAtMs: local.occurredAtMs, monotonicMs: local.monotonicMs, bootId: local.bootId }
       : server ? { id: server.id, eventType: server.eventType, occurredAtMs: serverMs, monotonicMs: null, bootId: null } : null;
 
-    const decision = decideNextEvent({ last, nowMs: clock.bestEstimateMs, nowMonotonicMs: mono, bootId, policy: st.policy });
+    const decision = decideNextEvent({ last, nowMs: clock.bestEstimateMs, nowMonotonicMs: mono, bootId, policy: st.policy, confirmEarlyOut: opts.confirmEarlyOut });
+    if (decision.kind === 'confirm_early_out') {
+      return { kind: 'confirm_early_out', displayName: emp.displayName, minutesSince: decision.minutesSince, inAtMs: decision.lastEvent.occurredAtMs };
+    }
     if (decision.kind === 'duplicate') {
       return { kind: 'duplicate', eventType: decision.lastEvent.eventType, displayName: emp.displayName, secondsSince: decision.secondsSince };
     }

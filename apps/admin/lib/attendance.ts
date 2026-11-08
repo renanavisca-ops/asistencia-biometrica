@@ -1,4 +1,5 @@
 import type { Ctx } from './context';
+import { DEFAULT_POLICY, summarizeWorkdays, type Workday } from '@asistencia/core';
 
 export type Filters = { org: string; from: string; to: string; store?: string; employee?: string };
 
@@ -30,4 +31,36 @@ export async function queryEvents(sb: Ctx['supabase'], f: Filters, limit = 5000)
   if (f.store) q = q.eq('store_id', f.store);
   if (f.employee) q = q.eq('employee_id', f.employee);
   return q;
+}
+
+export type SessionRow = {
+  id: string; state: 'open' | 'closed' | 'missing_out' | 'orphan_out'; opened_at: string | null; closed_at: string | null;
+  needs_review: boolean; employee_id: string;
+  employees: { employee_code: string; first_name: string; last_name: string };
+  stores: { code: string; name: string; timezone: string };
+};
+
+/** Política vigente de la organización (rango de pausas). */
+export async function orgPolicy(sb: Ctx['supabase'], org: string) {
+  const { data } = await sb.from('device_policy_versions').select('policy').eq('organization_id', org).order('version', { ascending: false }).limit(1).maybeSingle();
+  const p = { ...DEFAULT_POLICY, ...((data?.policy as Record<string, number>) ?? {}) };
+  return { pauseMinMinutes: Number(p.pauseMinMinutes), pauseMaxMinutes: Number(p.pauseMaxMinutes) };
+}
+
+export type WorkdayRow = Workday & { employee: SessionRow['employees']; store: SessionRow['stores'] };
+
+/** Resumen por jornada; cada grupo de zona horaria se resume con su propia zona. */
+export function workdaysFrom(rows: SessionRow[], pol: { pauseMinMinutes: number; pauseMaxMinutes: number }): WorkdayRow[] {
+  const meta = new Map(rows.map((r) => [r.employee_id, r]));
+  const byTz = new Map<string, SessionRow[]>();
+  for (const r of rows) (byTz.get(r.stores.timezone) ?? byTz.set(r.stores.timezone, []).get(r.stores.timezone)!).push(r);
+  const out: WorkdayRow[] = [];
+  for (const [tz, list] of byTz) {
+    const days = summarizeWorkdays(list.map((r) => ({
+      employeeId: r.employee_id, openedAtMs: r.opened_at ? Date.parse(r.opened_at) : null, closedAtMs: r.closed_at ? Date.parse(r.closed_at) : null,
+      state: r.state, needsReview: r.needs_review,
+    })), { timeZone: tz, ...pol });
+    for (const d of days) out.push({ ...d, employee: meta.get(d.employeeId)!.employees, store: meta.get(d.employeeId)!.stores });
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date) || a.employee.last_name.localeCompare(b.employee.last_name));
 }

@@ -27,6 +27,16 @@ function setup(fetchImpl?: Fetch) {
 const ident = { employeeId: EMP, matchScore: null, matchMargin: null, padScore: null, recognitionModel: 'SIMULADO@0', padModel: null };
 
 describe('KioskService (offline)', () => {
+  it('salida a los 3 min pide confirmación; sin confirmar no registra; confirmada registra SALIDA', async () => {
+    const { svc, store, platform } = setup();
+    await svc.punch(ident);
+    platform.advance(3 * 60_000);
+    expect(await svc.punch(ident)).toMatchObject({ kind: 'confirm_early_out', minutesSince: 3, displayName: 'María L.' });
+    expect(store.events.length).toBe(1);
+    const r = await svc.punch(ident, { confirmEarlyOut: true });
+    expect(r).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
+    expect(store.events[1]!.payload.decisionFlags).toContain('early_out_confirmed');
+  });
   it('ENTRADA → duplicado dentro de la ventana → SALIDA, todo sin red', async () => {
     const { svc, store, platform } = setup();
     expect(await svc.punch(ident)).toMatchObject({ kind: 'recorded', eventType: 'IN', displayName: 'María L.' });

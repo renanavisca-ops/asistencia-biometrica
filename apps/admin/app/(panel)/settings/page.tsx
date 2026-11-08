@@ -5,7 +5,9 @@ import { DEFAULT_POLICY } from '@asistencia/core';
 import { createPolicy } from './actions';
 
 const FIELDS: [keyof typeof DEFAULT_POLICY, string][] = [
-  ['antiDoubleWindowSec', 'Ventana anti-doble marcación (s)'], ['longSessionHours', 'Permanencia larga: aviso (h)'],
+  ['antiDoubleWindowSec', 'Ventana anti-doble marcación (s)'],
+  ['minSessionMinutes', 'Minutos tras ENTRADA en que una salida pide confirmación'],
+  ['pauseMinMinutes', 'Pausa/almuerzo: mínimo (min)'], ['pauseMaxMinutes', 'Pausa/almuerzo: máximo (min); más es otra jornada'], ['longSessionHours', 'Permanencia larga: aviso (h)'],
   ['staleSessionHours', 'Sesión caducada: siguiente marca = ENTRADA (h)'], ['offlineMaxHours', 'Máx. horas sin sincronizar antes de bloquear (0 = no bloquear)'],
   ['leaseHours', 'Validez de autorización de empleados sin renovar (h)'], ['serverTimeStaleHours', 'Horas sin hora de servidor → hora dudosa'],
   ['maxFailedAttempts', 'Intentos fallidos antes de pausa'], ['cooldownSec', 'Pausa tras intentos fallidos (s)'], ['confirmationSec', 'Duración de la confirmación (s)'],

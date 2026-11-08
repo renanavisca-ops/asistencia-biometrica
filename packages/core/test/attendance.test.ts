@@ -50,3 +50,26 @@ describe('decideNextEvent', () => {
     expect(d).toMatchObject({ kind: 'record', eventType: 'OUT', flags: ['clock_regression'] });
   });
 });
+
+describe('tiempo mínimo de sesión con confirmación', () => {
+  const p = { ...policy, minSessionMinutes: 30 };
+  it('salida 3 min después de entrar → pide confirmación, no registra', () => {
+    const d = decideNextEvent({ last: last('IN', t0), nowMs: t0 + 3 * 60_000, nowMonotonicMs: null, bootId: null, policy: p });
+    expect(d).toMatchObject({ kind: 'confirm_early_out', minutesSince: 3 });
+  });
+  it('confirmada → SALIDA con bandera', () => {
+    const d = decideNextEvent({ last: last('IN', t0), nowMs: t0 + 3 * 60_000, nowMonotonicMs: null, bootId: null, policy: p, confirmEarlyOut: true });
+    expect(d).toMatchObject({ kind: 'record', eventType: 'OUT', flags: ['early_out_confirmed'] });
+  });
+  it('dentro de la ventana anti-doble sigue siendo duplicado (sin preguntar)', () => {
+    expect(decideNextEvent({ last: last('IN', t0), nowMs: t0 + 30_000, nowMonotonicMs: null, bootId: null, policy: p }).kind).toBe('duplicate');
+  });
+  it('pasado el mínimo → SALIDA directa', () => {
+    expect(decideNextEvent({ last: last('IN', t0), nowMs: t0 + 31 * 60_000, nowMonotonicMs: null, bootId: null, policy: p }))
+      .toMatchObject({ kind: 'record', eventType: 'OUT', flags: [] });
+  });
+  it('tras una SALIDA no aplica (entrar de nuevo, p. ej. después de almuerzo, es directo)', () => {
+    expect(decideNextEvent({ last: last('OUT', t0), nowMs: t0 + 5 * 60_000, nowMonotonicMs: null, bootId: null, policy: p }))
+      .toMatchObject({ kind: 'record', eventType: 'IN' });
+  });
+});

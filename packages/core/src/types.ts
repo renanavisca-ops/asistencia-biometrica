@@ -13,13 +13,22 @@ export type ClockFlag =
 export type DecisionFlag =
   | ClockFlag
   | 'stale_open_session' // la sesión previa llevaba abierta más del umbral: se registra ENTRADA y se abre incidencia de salida omitida
-  | 'long_session_out'; // salida tras una permanencia larga pero dentro del umbral de caducidad
+  | 'long_session_out' // salida tras una permanencia larga pero dentro del umbral de caducidad
+  | 'early_out_confirmed'; // salida antes del tiempo mínimo, confirmada por la persona en pantalla
 
 /** Política operativa que el servidor distribuye a cada dispositivo (versionada). */
 export interface DevicePolicy {
   version: number;
   /** Ventana anti-doble-marcación en segundos: un segundo reconocimiento dentro de la ventana no alterna el estado. */
   antiDoubleWindowSec: number;
+  /**
+   * Minutos tras una ENTRADA durante los cuales una nueva marcación NO registra salida directamente: la app pide
+   * confirmación («Entró hace 2 min. ¿Registrar SALIDA?»). Evita salidas por marcar dos veces sin impedir salidas reales.
+   */
+  minSessionMinutes: number;
+  /** Rango (minutos) en que una salida seguida de entrada se considera pausa/almuerzo dentro de la misma jornada. */
+  pauseMinMinutes: number;
+  pauseMaxMinutes: number;
   /** Horas a partir de las cuales una permanencia se marca como larga (solo aviso/revisión). */
   longSessionHours: number;
   /**
@@ -49,6 +58,9 @@ export interface DevicePolicy {
 export const DEFAULT_POLICY: DevicePolicy = {
   version: 1,
   antiDoubleWindowSec: 120,
+  minSessionMinutes: 30,
+  pauseMinMinutes: 15,
+  pauseMaxMinutes: 150,
   longSessionHours: 14,
   staleSessionHours: 20,
   offlineMaxHours: 72,

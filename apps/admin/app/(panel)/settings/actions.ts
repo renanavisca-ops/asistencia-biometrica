@@ -2,7 +2,7 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import { back, s } from '@/lib/actions';
 
-const NUM = ['antiDoubleWindowSec', 'longSessionHours', 'staleSessionHours', 'offlineMaxHours', 'leaseHours', 'serverTimeStaleHours', 'maxFailedAttempts', 'cooldownSec', 'confirmationSec'] as const;
+const NUM = ['antiDoubleWindowSec', 'minSessionMinutes', 'pauseMinMinutes', 'pauseMaxMinutes', 'longSessionHours', 'staleSessionHours', 'offlineMaxHours', 'leaseHours', 'serverTimeStaleHours', 'maxFailedAttempts', 'cooldownSec', 'confirmationSec'] as const;
 const OPT = ['matchThreshold', 'matchMargin', 'padThreshold'] as const;
 
 export async function createPolicy(fd: FormData) {
@@ -17,6 +17,8 @@ export async function createPolicy(fd: FormData) {
   const bad = Object.entries(policy).find(([, v]) => v !== null && !Number.isFinite(v));
   if (bad) back('/settings', fd, { message: `Valor inválido en ${bad[0]}` }, '');
   if (policy.staleSessionHours! <= policy.longSessionHours!) back('/settings', fd, { message: 'La caducidad de sesión debe ser mayor que la sesión larga' }, '');
+  if (policy.pauseMinMinutes! >= policy.pauseMaxMinutes!) back('/settings', fd, { message: 'La pausa mínima debe ser menor que la máxima' }, '');
+  if (policy.minSessionMinutes! * 60 < policy.antiDoubleWindowSec!) back('/settings', fd, { message: 'El tiempo mínimo de sesión debe ser mayor o igual que la ventana anti-doble' }, '');
   const { error } = await sb.from('device_policy_versions').insert({ organization_id: org, version: (last?.version ?? 0) + 1, policy, created_by: user?.id });
   back('/settings', fd, error, 'Nueva versión de política creada; los teléfonos la reciben en su próxima sincronización');
 }

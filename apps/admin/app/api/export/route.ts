@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
-import { queryEvents, querySessions } from '@/lib/attendance';
+import { orgPolicy, queryEvents, querySessions, workdaysFrom, type SessionRow } from '@/lib/attendance';
 
 const esc = (v: unknown) => {
   const s = v == null ? '' : Array.isArray(v) ? v.join('|') : String(v);
@@ -22,7 +22,15 @@ export async function GET(req: NextRequest) {
   const f = { org, from, to, store: p.get('store') ?? undefined, employee: p.get('employee') ?? undefined };
   let rows: unknown[][] = [];
   let header: string[];
-  if (p.get('type') === 'events') {
+  const type = p.get('type');
+  if (type === 'days') {
+    const [{ data, error }, pol] = await Promise.all([querySessions(sb, f, 50000), orgPolicy(sb, org)]);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    const loc = (ms: number | null, tz: string) => ms == null ? '' : new Date(ms).toLocaleString('sv-SE', { timeZone: tz });
+    header = ['fecha', 'codigo_empleado', 'empleado', 'sede', 'primera_entrada_local', 'ultima_salida_local', 'presente_minutos', 'pausas', 'pausa_minutos', 'en_curso', 'requiere_revision'];
+    rows = workdaysFrom((data ?? []) as unknown as SessionRow[], pol).map((d) => [d.date, d.employee.employee_code, `${d.employee.last_name}, ${d.employee.first_name}`,
+      d.store.code, loc(d.firstInMs, d.store.timezone), loc(d.lastOutMs, d.store.timezone), d.presentMinutes, d.pauses.length, d.pauseMinutes, d.open, d.needsReview]);
+  } else if (type === 'events') {
     const { data, error } = await queryEvents(sb, f, 50000);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     header = ['event_id', 'codigo_empleado', 'empleado', 'sede', 'telefono', 'tipo', 'hora_evento_utc', 'recibido_utc', 'estado', 'motivos_revision', 'origen', 'offline', 'banderas_reloj', 'secuencia'];
@@ -46,7 +54,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(csv, {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="asistencia_${p.get('type') === 'events' ? 'eventos' : 'sesiones'}_${from}_${to}.csv"`,
+      'content-disposition': `attachment; filename="asistencia_${type === 'events' ? 'eventos' : type === 'days' ? 'jornadas' : 'sesiones'}_${from}_${to}.csv"`,
       'cache-control': 'no-store',
     },
   });

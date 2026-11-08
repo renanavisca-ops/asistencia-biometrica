@@ -9,6 +9,12 @@ export type Decision =
       previousSessionMissingOut: boolean;
     }
   | {
+      kind: 'confirm_early_out';
+      /** Sesión abierta hace menos de minSessionMinutes: la persona debe confirmar que quiere registrar SALIDA. */
+      lastEvent: LastEventRef;
+      minutesSince: number;
+    }
+  | {
       kind: 'duplicate';
       /** Evento ya registrado dentro de la ventana anti-doble-marcación. No se altera el estado. */
       lastEvent: LastEventRef;
@@ -20,7 +26,9 @@ export interface DecisionInput {
   nowMs: number;
   nowMonotonicMs: number | null;
   bootId: string | null;
-  policy: Pick<DevicePolicy, 'antiDoubleWindowSec' | 'staleSessionHours' | 'longSessionHours'>;
+  policy: Pick<DevicePolicy, 'antiDoubleWindowSec' | 'staleSessionHours' | 'longSessionHours'> & Partial<Pick<DevicePolicy, 'minSessionMinutes'>>;
+  /** La persona confirmó en pantalla una salida anticipada. */
+  confirmEarlyOut?: boolean;
 }
 
 /**
@@ -48,6 +56,7 @@ export function elapsedSinceMs(input: DecisionInput): { ms: number; source: 'mon
  * - Sin sesión abierta → ENTRADA.
  * - Con sesión abierta → SALIDA.
  * - Reconocimiento repetido dentro de la ventana anti-doble → no se registra nada (idempotente).
+ * - Con sesión abierta hace menos de minSessionMinutes → se pide confirmación antes de registrar SALIDA.
  * - Sesión abierta más allá de `staleSessionHours` → ENTRADA nueva + incidencia de salida omitida. Se elige así
  *   porque, tras una ausencia larga, es más probable que la persona esté llegando; ambas cosas quedan en revisión.
  *   No se crea ningún evento de salida sintético.
@@ -81,6 +90,11 @@ export function decideNextEvent(input: DecisionInput): Decision {
       flags: [...flags, 'stale_open_session'],
       previousSessionMissingOut: true,
     };
+  }
+  const minSession = policy.minSessionMinutes ?? 0;
+  if (!regression && ms < minSession * 60_000) {
+    if (!input.confirmEarlyOut) return { kind: 'confirm_early_out', lastEvent: last, minutesSince: Math.floor(ms / 60_000) };
+    flags.push('early_out_confirmed');
   }
   if (!regression && hours >= policy.longSessionHours) flags.push('long_session_out');
   return { kind: 'record', eventType: 'OUT', flags, previousSessionMissingOut: false };

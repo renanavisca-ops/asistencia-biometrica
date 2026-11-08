@@ -247,6 +247,11 @@ function BioFail({ o, onRetry, onHome }: { o: CaptureOutcome; onRetry: () => voi
       <div className="big">{t}</div>
       <p style={{ fontSize: 22 }}>{d}</p>
       <p>No se registró ninguna marcación. Si no puede ser reconocido, avise al encargado.</p>
+      {o.kind === 'liveness_failed' && (
+        <p className="muted" style={{ fontSize: 13 }}>Detalle técnico: {o.reason === 'passive' ? 'prueba pasiva' : o.reason === 'identity_changed' ? 'continuidad de identidad' : 'desafío no completado'}
+          {o.score !== undefined && ` ${o.score.toFixed(2)} (mínimo ${o.threshold?.toFixed(2)})`}</p>
+      )}
+      {o.kind === 'not_recognized' && o.bestScore !== null && <p className="muted" style={{ fontSize: 13 }}>Detalle técnico: mejor similitud {o.bestScore.toFixed(2)}</p>}
       <button className="btn" onClick={onRetry}>Intentar de nuevo</button>
     </div>
   );

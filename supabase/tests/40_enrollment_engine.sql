@@ -8,12 +8,17 @@ select test.ok(abs(private.cosine(array[1,0,0], array[0.6,0.8,0]) - 0.6) < 1e-9,
 select test.ok(exists (select 1 from public.model_versions where name = 'sface' and version = '2021dec' and embedding_dim = 128 and status = 'evaluation'), 'modelo sface@2021dec registrado como experimental');
 
 select test.as_user('00000000-0000-4000-8000-00000000000b');
-create temp table d1 as select (public.create_employee('a0000000-0000-4000-8000-000000000000', 'Dup', 'Uno', null, null, null, null, 'a2000000-0000-4000-8000-000000000001') ->> 'id')::uuid id;
+create temp table d1 as select (public.create_employee('a0000000-0000-4000-8000-000000000000', 'Dup', 'Uno', 'DPI', 'GT', '2222222222222', null, 'a2000000-0000-4000-8000-000000000001') ->> 'id')::uuid id;
 create temp table d2 as select (public.create_employee('a0000000-0000-4000-8000-000000000000', 'Dup', 'Dos', null, null, null, null, 'a2000000-0000-4000-8000-000000000001') ->> 'id')::uuid id;
 insert into public.biometric_consents (organization_id, employee_id, legal_basis, notice_version, accepted_at, recorded_by)
   select 'a0000000-0000-4000-8000-000000000000'::uuid, id, 'consentimiento_expreso', 'v1', now(), '00000000-0000-4000-8000-00000000000b'::uuid from d1 union all
   select 'a0000000-0000-4000-8000-000000000000'::uuid, id, 'consentimiento_expreso', 'v1', now(), '00000000-0000-4000-8000-00000000000b'::uuid from d2;
 select test.ok(public.central_store_for('a0000000-0000-4000-8000-000000000000') = 'a2000000-0000-4000-8000-000000000009', 'sede central de la organización');
+select test.ok(public.verify_employee_document((select id from d2), '2222222222222') ->> 'reason' = 'no_document', 'd2 sin documento');
+select public.set_employee_document((select id from d2), 'DPI', 'GT', '3333333333333', 'prueba automatizada') is null;
+select test.ok(public.verify_employee_document((select id from d2), '2222222222222') ->> 'reason' = 'other_employee', 'documento de otro empleado: bloqueado y señalado');
+select test.ok(exists (select 1 from public.security_events where kind = 'enroll_document_mismatch'), 'intento registrado como evento de seguridad');
+select test.ok((public.verify_employee_document((select id from d1), '2222222222222') ->> 'ok')::boolean, 'd1 verificado');
 select public.enroll_biometric((select id from d1), (select id from public.biometric_consents where employee_id = (select id from d1)), 'a2000000-0000-4000-8000-000000000009',
   'documento', array['AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA'], '{}', true, 0.9, 'c0000000-0000-4000-8000-000000000001', null) is not null;
 select test.ok((select employee_code from public.check_biometric_duplicate((select id from d2), array['AACAPwAAAAAAAAAA'], 'c0000000-0000-4000-8000-000000000001', 0.9)) = (select employee_code from public.employees where id = (select id from d1)),

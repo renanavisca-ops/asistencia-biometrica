@@ -8,13 +8,13 @@ export type CaptureOutcome =
   | { kind: 'identified'; id: Identification }
   | { kind: 'not_recognized'; bestScore: number | null }
   | { kind: 'ambiguous' }
-  | { kind: 'liveness_failed'; reason: 'passive' | 'challenge_timeout' | 'identity_changed' }
+  | { kind: 'liveness_failed'; reason: 'passive' | 'challenge_timeout' | 'identity_changed'; score?: number; threshold?: number }
   | { kind: 'uncalibrated' }
   | { kind: 'no_templates' }
   | { kind: 'timeout' }
   | { kind: 'engine_error'; message: string };
 
-const FRONTAL_FRAMES = 2;
+const FRONTAL_FRAMES = 3;
 const MAX_MS = 30_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -78,15 +78,16 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
         }
         setChallengeText(null);
         if (!done) return finish({ kind: 'liveness_failed', reason: 'challenge_timeout' });
-        setHint('Ahora mire de frente');
+        setHint('Ahora mire de frente y quédese quieto');
+        await sleep(700); // deja que la cabeza vuelva al frente: los fotogramas movidos bajan la prueba pasiva
         const b = await frontal(FRONTAL_FRAMES);
         if (!b) return finish({ kind: 'timeout' });
         B = b;
         passive = (A.pad + B.pad) / 2;
         // Continuidad: la persona tras el desafío debe ser la misma que antes.
-        if (cosine(A.emb, B.emb) < policy.matchThreshold) return finish({ kind: 'liveness_failed', reason: 'identity_changed' });
+        if (cosine(A.emb, B.emb) < policy.matchThreshold) return finish({ kind: 'liveness_failed', reason: 'identity_changed', score: cosine(A.emb, B.emb), threshold: policy.matchThreshold });
       }
-      if (passive < policy.padThreshold) return finish({ kind: 'liveness_failed', reason: 'passive' });
+      if (passive < policy.padThreshold) return finish({ kind: 'liveness_failed', reason: 'passive', score: passive, threshold: policy.padThreshold });
 
       const probe = FreeFaceRecognitionAdapter.average([A.emb, B.emb]);
       const m: MatchResult = eng.identify(probe, roster, policy);

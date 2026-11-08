@@ -119,7 +119,8 @@ function EmployeeList({ sb, org, setErr, onPick }: { sb: SupabaseClient; org: st
 function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient; org: string; emp: Emp; setErr: (e: string | null) => void; onBack: () => void; onReady: (consentId: string, identity: string) => void }) {
   const [consentId, setConsentId] = useState<string | null | undefined>(undefined);
   const [signed, setSigned] = useState(false); const [docChecked, setDocChecked] = useState(false);
-  const [method, setMethod] = useState('Documento de identidad presentado y verificado en persona');
+  const docRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     sb.from('biometric_consents').select('id').eq('employee_id', emp.id).is('withdrawn_at', null).order('accepted_at', { ascending: false }).limit(1)
       .then(({ data }) => setConsentId(data?.[0]?.id ?? null));
@@ -134,9 +135,20 @@ function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient
       )}
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 24, height: 24 }} checked={docChecked} onChange={(e) => setDocChecked(e.target.checked)} />
         Verifiqué su identidad con el documento original.</label>
-      <input defaultValue={method} onBlur={(e) => setMethod(e.target.value)} className="plain" autoCorrect="off" spellCheck={false} />
-      <button className="btn primary" disabled={!docChecked || (!consentId && !signed)} onClick={async () => {
+      <label style={{ display: 'grid', gap: 4 }}>Número de documento del empleado (se compara con el registrado):
+        <input ref={docRef} name="doc" className="plain" placeholder="Escriba el número del documento original" inputMode="text"
+          autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false} />
+      </label>
+      <button className="btn primary" disabled={busy || !docChecked || (!consentId && !signed)} onClick={async () => {
         setErr(null);
+        const doc = (docRef.current?.value ?? '').replace(/[^A-Za-z0-9]/g, '');
+        if (doc.length < 5) return setErr('Escriba el número de documento del empleado.');
+        setBusy(true);
+        const { data: v, error: vErr } = await sb.rpc('verify_employee_document', { p_employee_id: emp.id, p_document_number: doc });
+        setBusy(false);
+        if (vErr) return setErr('No se pudo verificar el documento: ' + vErr.message);
+        const ver = v as { ok: boolean; message?: string };
+        if (!ver.ok) { if (docRef.current) docRef.current.value = ''; return setErr(ver.message ?? 'El documento no coincide.'); }
         let cid = consentId;
         if (!cid) {
           const { data: u } = await sb.auth.getUser();
@@ -145,7 +157,7 @@ function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient
           if (error || !data) return setErr('No se pudo registrar el consentimiento: ' + (error?.message ?? ''));
           cid = data.id;
         }
-        onReady(cid!, method);
+        onReady(cid!, 'Documento original revisado en persona; número coincide con el registrado');
       }}>Continuar a la captura</button>
       <button className="btn small" onClick={onBack}>Volver</button>
     </div>

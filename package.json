@@ -1,0 +1,14 @@
+{
+  "name": "asistencia-biometrica",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.18.3",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "test:db": "bash scripts/test-db.sh",
+    "sync:shared": "node scripts/sync-shared.mjs"
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage/
+supabase/.temp/
+supabase/.branches/
+apps/kiosk/android/app/build/
+apps/kiosk/ios/App/Pods/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

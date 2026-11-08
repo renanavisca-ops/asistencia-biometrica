@@ -47,10 +47,13 @@ export function Enrollment({ organizationId, onClose }: { organizationId: string
 }
 
 function Login({ sb, busy, setBusy, setErr, onOk }: { sb: SupabaseClient; busy: boolean; setBusy: (b: boolean) => void; setErr: (e: string | null) => void; onOk: (factorId: string | null) => void }) {
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
+  // Campos NO controlados: evita conflictos con el teclado (sugerencias, autocompletado) en la WebView de Android.
   return (
     <form style={{ display: 'grid', gap: 10, width: 'min(420px, 92vw)' }} onSubmit={async (e) => {
       e.preventDefault(); setBusy(true); setErr(null);
+      const fd = new FormData(e.currentTarget);
+      const email = String(fd.get('email') ?? '').replace(/\s+/g, '').toLowerCase();
+      const password = String(fd.get('password') ?? '');
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) { setBusy(false); return setErr('Credenciales inválidas o sin conexión.'); }
       const { data } = await sb.auth.mfa.listFactors();
@@ -59,24 +62,25 @@ function Login({ sb, busy, setBusy, setErr, onOk }: { sb: SupabaseClient; busy: 
       if (!f) return setErr('Su cuenta no tiene verificación en dos pasos. Configúrela primero en el panel web.');
       onOk(f.id);
     }}>
-      <input type="email" placeholder="correo del administrador" style={{ letterSpacing: 0, textTransform: 'none', fontSize: 18 }} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" />
-      <input type="password" placeholder="contraseña" style={{ letterSpacing: 0, textTransform: 'none', fontSize: 18 }} value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="off" />
+      <input name="email" type="email" inputMode="email" className="plain" placeholder="correo del administrador" required
+        autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+      <input name="password" type="password" className="plain" placeholder="contraseña" required autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
       <button className="btn primary" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
     </form>
   );
 }
 
 function Mfa({ sb, factorId, setErr, onOk }: { sb: SupabaseClient; factorId: string; setErr: (e: string | null) => void; onOk: () => void }) {
-  const [code, setCode] = useState('');
   return (
     <form style={{ display: 'grid', gap: 10 }} onSubmit={async (e) => {
       e.preventDefault(); setErr(null);
-      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
+      const code = String(new FormData(e.currentTarget).get('code') ?? '').replace(/\D/g, '');
+      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code });
       if (error) return setErr('Código incorrecto o caducado.');
       onOk();
     }}>
       <p>Código de su app de autenticación</p>
-      <input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} required />
+      <input name="code" inputMode="numeric" pattern="[0-9 ]*" maxLength={7} required autoComplete="one-time-code" autoCorrect="off" spellCheck={false} />
       <button className="btn primary">Verificar</button>
     </form>
   );
@@ -101,7 +105,7 @@ function EmployeeList({ sb, org, setErr, onPick }: { sb: SupabaseClient; org: st
   const f = list.filter((e) => `${e.employee_code} ${e.first_name} ${e.last_name}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <div style={{ width: 'min(480px, 94vw)', display: 'grid', gap: 8 }}>
-      <input placeholder="buscar nombre o código" style={{ letterSpacing: 0, textTransform: 'none', fontSize: 18 }} value={q} onChange={(e) => setQ(e.target.value)} />
+      <input placeholder="buscar nombre o código" className="plain" autoCorrect="off" autoCapitalize="none" spellCheck={false} onChange={(e) => setQ(e.target.value)} />
       {f.map((e) => (
         <button key={e.id} className="btn" style={{ textAlign: 'left', fontSize: 18 }} onClick={() => onPick(e)}>
           {e.last_name}, {e.first_name} <span className="muted">#{e.employee_code}</span> {e.enrolled ? '✅ enrolado' : '⏳ pendiente'}
@@ -130,7 +134,7 @@ function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient
       )}
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 24, height: 24 }} checked={docChecked} onChange={(e) => setDocChecked(e.target.checked)} />
         Verifiqué su identidad con el documento original.</label>
-      <input value={method} onChange={(e) => setMethod(e.target.value)} style={{ letterSpacing: 0, textTransform: 'none', fontSize: 16, textAlign: 'left' }} />
+      <input defaultValue={method} onBlur={(e) => setMethod(e.target.value)} className="plain" autoCorrect="off" spellCheck={false} />
       <button className="btn primary" disabled={!docChecked || (!consentId && !signed)} onClick={async () => {
         setErr(null);
         let cid = consentId;

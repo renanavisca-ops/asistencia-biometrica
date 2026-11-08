@@ -17,3 +17,6 @@ input { font:inherit; font-size:26px; letter-spacing:.15em; text-transform:upper
 .picker { display:grid; gap:10px; width:min(480px, 92vw); max-height:55vh; overflow:auto; }
 .overlay { position:fixed; inset:0; background:rgba(5,9,18,.96); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; z-index:10; text-align:left; }
 .overlay table { font-size:15px; } .overlay td { padding:3px 10px; }
+/* Los campos de texto deben permitir selección y edición normales aunque el resto de la pantalla no sea seleccionable. */
+input, textarea { user-select: text; -webkit-user-select: text; }
+input.plain { letter-spacing: 0; text-transform: none; font-size: 18px; text-align: left; }

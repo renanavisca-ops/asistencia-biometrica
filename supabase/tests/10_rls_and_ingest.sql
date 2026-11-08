@@ -12,6 +12,8 @@ create function test.reset() returns void language plpgsql as $$
 begin execute 'reset role'; perform set_config('request.jwt.claims', '', false); end $$;
 create function test.raises(sql text) returns boolean language plpgsql as $$
 begin execute sql; return false; exception when others then return true; end $$;
+create function test.ack(acks jsonb, id text) returns jsonb language sql as $$
+  select x from jsonb_array_elements(acks) x where x ->> 'eventId' = id $$;
 grant usage on schema test to authenticated, anon, service_role; grant execute on all functions in schema test to authenticated, anon, service_role;
 
 -- ---------- Fixtures ----------
@@ -96,10 +98,10 @@ create temp table acks1 as select private.ingest_device_events('d0000000-0000-40
   {"id":"e1000000-0000-4000-8000-000000000003","storeId":"a2000000-0000-4000-8000-000000000001","employeeId":"a3000000-0000-4000-8000-000000000002","eventType":"IN","deviceSeq":3,"occurredAt":"2026-11-07T15:00:00Z","tzOffsetMin":-360,"monotonicMs":3000,"bootId":"b1","clockFlags":["reboot_since_server_sync"],"decisionFlags":[],"capturedOffline":true,"policyVersion":1,"appVersion":"0.1.0","signature":"sig"},
   {"id":"e1000000-0000-4000-8000-000000000004","storeId":"a2000000-0000-4000-8000-000000000001","employeeId":"b3000000-0000-4000-8000-000000000001","eventType":"IN","deviceSeq":4,"occurredAt":"2026-11-07T15:00:00Z","tzOffsetMin":-360,"monotonicMs":4000,"bootId":"b1","clockFlags":[],"decisionFlags":[],"capturedOffline":true,"policyVersion":1,"appVersion":"0.1.0","signature":"sig"}
 ]$$::jsonb, array['e1000000-0000-4000-8000-0000000000ff']::uuid[]) a;
-select test.ok((select a -> 0 ->> 'result' from acks1) = 'accepted', 'ENTRADA válida aceptada');
-select test.ok((select a -> 1 ->> 'result' from acks1) = 'accepted', 'SALIDA válida aceptada');
-select test.ok((select a -> 2 ->> 'result' from acks1) = 'needs_review' and (select a -> 2 ->> 'reason' from acks1) like '%unassigned_store%' and (select a -> 2 ->> 'reason' from acks1) like '%clock_anomaly%', 'empleado no asignado y reloj dudoso → revisión, no se pierde');
-select test.ok((select a -> 3 ->> 'reason' from acks1) = 'unknown_employee', 'empleado de otra organización rechazado');
+select test.ok((select test.ack(a, 'e1000000-0000-4000-8000-000000000001') ->> 'result' from acks1) = 'accepted', 'ENTRADA válida aceptada');
+select test.ok((select test.ack(a, 'e1000000-0000-4000-8000-000000000002') ->> 'result' from acks1) = 'accepted', 'SALIDA válida aceptada');
+select test.ok((select test.ack(a, 'e1000000-0000-4000-8000-000000000003') ->> 'result' from acks1) = 'needs_review' and (select test.ack(a, 'e1000000-0000-4000-8000-000000000003') ->> 'reason' from acks1) like '%unassigned_store%' and (select test.ack(a, 'e1000000-0000-4000-8000-000000000003') ->> 'reason' from acks1) like '%clock_anomaly%', 'empleado no asignado y reloj dudoso → revisión, no se pierde');
+select test.ok((select test.ack(a, 'e1000000-0000-4000-8000-000000000004') ->> 'reason' from acks1) = 'unknown_employee', 'empleado de otra organización rechazado');
 select test.ok((select count(*) from public.sync_acknowledgements where reason = 'signature_invalid') = 1, 'firma inválida registrada como rechazada');
 
 create temp table acks_retry as select private.ingest_device_events('d0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', '[]'::jsonb) a;

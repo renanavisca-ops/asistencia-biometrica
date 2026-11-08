@@ -4,6 +4,7 @@ create role authenticated nologin;
 create role service_role nologin bypassrls;
 create schema auth;
 create schema extensions;
+create extension pgcrypto with schema extensions;
 grant usage on schema auth, extensions, public to anon, authenticated, service_role;
 create table auth.users (id uuid primary key, email text);
 create function auth.jwt() returns jsonb language sql stable as $$
@@ -12,3 +13,8 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 grant execute on function auth.jwt(), auth.uid() to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to service_role;
 alter default privileges in schema public grant all on functions to service_role;
+-- Stub mínimo de Supabase Vault.
+create schema vault;
+create table vault.secrets (name text primary key, secret text not null);
+create view vault.decrypted_secrets as select name, secret as decrypted_secret from vault.secrets;
+insert into vault.secrets values ('template_enc_key', encode(extensions.gen_random_bytes(32), 'base64'));

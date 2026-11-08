@@ -9,6 +9,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "test:db": "bash scripts/test-db.sh",
+    "test:edge": "bash scripts/test-edge.sh",
     "sync:shared": "node scripts/sync-shared.mjs"
   }
 }

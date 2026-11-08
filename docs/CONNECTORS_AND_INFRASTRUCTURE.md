@@ -7,7 +7,7 @@ Sin secretos. Solo recursos realmente comprobados.
 | GitHub `renanavisca-ops/asistencia-biometrica` | Creado por el propietario; push verificado | Código, CI (GitHub Actions) |
 | Supabase org `renanavisca-ops's Org` (plan Pro) | Conector MCP operativo | — |
 | Supabase proyecto `grsezvfrkxzurgelyujv` (us-east-2) | Reutilizado por decisión del propietario. Contenido anterior ("Centro de Capacitacion": 5 tablas, 3 funciones, 1 usuario) **borrado** el 2026-11-08. Migraciones 0100/0200/0300 aplicadas; checksums MD5 idénticos a los archivos del repo | Backend único del sistema |
-| Vercel equipo `Efren's projects` | Conector MCP operativo; proyecto propio **aún no creado** | Panel administrativo |
+| Vercel equipo `Efren's projects` (Hobby) | Conector MCP con lectura; **sin permiso para crear proyectos**. Proyecto `asistencia-biometrica` creado por el propietario desde el dashboard | Panel: https://asistencia-biometrica.vercel.app |
 | Otros proyectos Supabase (`mobile-chat-mvp`, `Agente de Responsabilidades`) y Vercel (`mobile-chat-mvp`, `new-control-de-costales`, `landing-ia-latam`, `project-giklo`) | **No tocar.** No relacionados | — |
 
 ## Pendiente del propietario

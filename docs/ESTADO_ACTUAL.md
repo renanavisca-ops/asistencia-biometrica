@@ -14,7 +14,7 @@ Verificado directamente en código, base de datos y pruebas (no en el resumen).
 | Panel: reportes por jornada, incidencias, exportación CSV, auditoría, MFA | ✅ Funciona | `apps/admin`; desplegado en Vercel |
 | **Reconocimiento facial** | 🧪 Experimental funcionando (Etapa 1) | MediaPipe + SFace en la app, sin red; identificación 1:N automática; pruebas en docs/PRUEBAS_RECONOCIMIENTO.md. Pendiente: medición en teléfono real y calibración con voluntarios |
 | **Prueba de vida** | 🧪 Experimental funcionando (Etapa 2) | Pasiva MiniFASNet + desafío activo aleatorio + continuidad de identidad; imagen estática rechazada en E2E. Pendiente: pruebas físicas con fotos/pantallas/vídeo (docs/PRUEBAS_ANTISPOOFING.md) |
-| **Enrolamiento facial central** | ⚠️ Solo backend | `enroll_biometric` (sede central, consentimiento, PAD, 3–10 muestras); sin captura |
+| **Enrolamiento facial central** | 🧪 Implementado (Etapa 3) | Modo enrolamiento en la app con login de administrador + MFA; duplicados 1:N en servidor (11 pruebas SQL). Pendiente: prueba en teléfono |
 | Protecciones de la app (sin quiosco bloqueado, por decisión) | ⚠️ Parcial | FLAG_SECURE, sin backup en la nube; faltan PIN de encargado, root/integridad, alertas |
 | Marcación supervisada | ❌ No existe | El esquema lo admite (`source = supervised_exception`) |
 | iOS | ❌ No iniciado | Requiere macOS + Apple Developer |

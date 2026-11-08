@@ -74,6 +74,9 @@ importers:
       '@noble/hashes':
         specifier: 2.4.0
         version: 2.4.0
+      '@supabase/supabase-js':
+        specifier: 2.118.0
+        version: 2.118.0
       onnxruntime-web:
         specifier: 1.30.0
         version: 1.30.0

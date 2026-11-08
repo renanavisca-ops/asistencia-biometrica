@@ -1,0 +1,227 @@
+import { useEffect, useRef, useState } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { ActiveChallenge, CHALLENGE_TEXT, getEngine, QUALITY_MESSAGE, randomChallenge, FreeFaceRecognitionAdapter } from '../infra/biometric/index.ts';
+import { createAdminClient } from '../infra/adminSession.ts';
+import { Camera } from './Camera.tsx';
+
+type Emp = { id: string; employee_code: string; first_name: string; last_name: string; status: string };
+type Step =
+  | { s: 'login' } | { s: 'mfa'; factorId: string } | { s: 'list' }
+  | { s: 'prepare'; emp: Emp } | { s: 'capture'; emp: Emp; consentId: string; identity: string } | { s: 'done'; emp: Emp; message: string };
+
+const SAMPLES = 5;
+const DUP_THRESHOLD = 0.6; // provisional (Etapa 4 lo calibrará); se publica en docs/PRUEBAS_RECONOCIMIENTO.md
+const PAD_ENROLL_MIN = 0.8; // provisional
+const b64 = (v: Float32Array) => { let s = ''; for (const b of new Uint8Array(v.buffer)) s += String.fromCharCode(b); return btoa(s); };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Modo enrolamiento (administrador): registro facial en la sede central de la organización del teléfono. Requiere internet. */
+export function Enrollment({ organizationId, onClose }: { organizationId: string; onClose: () => void }) {
+  const sb = useRef<SupabaseClient>(createAdminClient());
+  const [step, setStep] = useState<Step>({ s: 'login' });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const close = async () => { await sb.current.auth.signOut().catch(() => {}); onClose(); };
+
+  return (
+    <div className="overlay" style={{ justifyContent: 'flex-start', paddingTop: 40, overflowY: 'auto', textAlign: 'center' }}>
+      <h1>Enrolamiento facial</h1>
+      <p className="muted" style={{ fontSize: 13, margin: 0 }}>Solo administradores. Motor EXPERIMENTAL (sface@2021dec + MiniFASNet). Requiere internet.</p>
+      {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
+      {step.s === 'login' && <Login sb={sb.current} busy={busy} setBusy={setBusy} setErr={setErr} onOk={(factorId) => setStep(factorId ? { s: 'mfa', factorId } : { s: 'list' })} />}
+      {step.s === 'mfa' && <Mfa sb={sb.current} factorId={step.factorId} setErr={setErr} onOk={() => setStep({ s: 'list' })} />}
+      {step.s === 'list' && <EmployeeList sb={sb.current} org={organizationId} setErr={setErr} onPick={(emp) => setStep({ s: 'prepare', emp })} />}
+      {step.s === 'prepare' && <Prepare sb={sb.current} org={organizationId} emp={step.emp} setErr={setErr} onBack={() => setStep({ s: 'list' })}
+        onReady={(consentId, identity) => setStep({ s: 'capture', emp: step.emp, consentId, identity })} />}
+      {step.s === 'capture' && <Capture sb={sb.current} org={organizationId} emp={step.emp} consentId={step.consentId} identity={step.identity} setErr={setErr}
+        onDone={(message) => setStep({ s: 'done', emp: step.emp, message })} onBack={() => setStep({ s: 'list' })} />}
+      {step.s === 'done' && (
+        <>
+          <p style={{ fontSize: 22 }}>{step.message}</p>
+          <button className="btn primary" onClick={() => { setErr(null); setStep({ s: 'list' }); }}>Enrolar a otra persona</button>
+        </>
+      )}
+      <button className="btn small" style={{ marginTop: 16 }} onClick={close}>Salir del modo enrolamiento</button>
+    </div>
+  );
+}
+
+function Login({ sb, busy, setBusy, setErr, onOk }: { sb: SupabaseClient; busy: boolean; setBusy: (b: boolean) => void; setErr: (e: string | null) => void; onOk: (factorId: string | null) => void }) {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
+  return (
+    <form style={{ display: 'grid', gap: 10, width: 'min(420px, 92vw)' }} onSubmit={async (e) => {
+      e.preventDefault(); setBusy(true); setErr(null);
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) { setBusy(false); return setErr('Credenciales inválidas o sin conexión.'); }
+      const { data } = await sb.auth.mfa.listFactors();
+      setBusy(false);
+      const f = data?.totp.find((x) => x.status === 'verified');
+      if (!f) return setErr('Su cuenta no tiene verificación en dos pasos. Configúrela primero en el panel web.');
+      onOk(f.id);
+    }}>
+      <input type="email" placeholder="correo del administrador" style={{ letterSpacing: 0, textTransform: 'none', fontSize: 18 }} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" />
+      <input type="password" placeholder="contraseña" style={{ letterSpacing: 0, textTransform: 'none', fontSize: 18 }} value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="off" />
+      <button className="btn primary" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+    </form>
+  );
+}
+
+function Mfa({ sb, factorId, setErr, onOk }: { sb: SupabaseClient; factorId: string; setErr: (e: string | null) => void; onOk: () => void }) {
+  const [code, setCode] = useState('');
+  return (
+    <form style={{ display: 'grid', gap: 10 }} onSubmit={async (e) => {
+      e.preventDefault(); setErr(null);
+      const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
+      if (error) return setErr('Código incorrecto o caducado.');
+      onOk();
+    }}>
+      <p>Código de su app de autenticación</p>
+      <input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} required />
+      <button className="btn primary">Verificar</button>
+    </form>
+  );
+}
+
+function EmployeeList({ sb, org, setErr, onPick }: { sb: SupabaseClient; org: string; setErr: (e: string | null) => void; onPick: (e: Emp) => void }) {
+  const [list, setList] = useState<(Emp & { enrolled: boolean })[] | null>(null);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    (async () => {
+      const [{ data, error }, { data: enr }, { data: model }] = await Promise.all([
+        sb.from('employees').select('id, employee_code, first_name, last_name, status').eq('organization_id', org).eq('status', 'active').order('last_name'),
+        sb.from('biometric_enrollments').select('employee_id, recognition_model_id').eq('organization_id', org).eq('status', 'active'),
+        sb.from('model_versions').select('id').eq('name', 'sface').eq('version', '2021dec').maybeSingle(),
+      ]);
+      if (error) return setErr('No se pudo cargar la lista (¿permisos o conexión?).');
+      const real = new Set((enr ?? []).filter((x) => x.recognition_model_id === model?.id).map((x) => x.employee_id));
+      setList((data ?? []).map((e) => ({ ...e, enrolled: real.has(e.id) })));
+    })();
+  }, [sb, org, setErr]);
+  if (!list) return <p>Cargando…</p>;
+  const f = list.filter((e) => `${e.employee_code} ${e.first_name} ${e.last_name}`.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div style={{ width: 'min(480px, 94vw)', display: 'grid', gap: 8 }}>
+      <input placeholder="buscar nombre o código" style={{ letterSpacing: 0, textTransform: 'none', fontSize: 18 }} value={q} onChange={(e) => setQ(e.target.value)} />
+      {f.map((e) => (
+        <button key={e.id} className="btn" style={{ textAlign: 'left', fontSize: 18 }} onClick={() => onPick(e)}>
+          {e.last_name}, {e.first_name} <span className="muted">#{e.employee_code}</span> {e.enrolled ? '✅ enrolado' : '⏳ pendiente'}
+        </button>
+      ))}
+      {f.length === 0 && <p className="muted">Sin empleados activos.</p>}
+    </div>
+  );
+}
+
+function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient; org: string; emp: Emp; setErr: (e: string | null) => void; onBack: () => void; onReady: (consentId: string, identity: string) => void }) {
+  const [consentId, setConsentId] = useState<string | null | undefined>(undefined);
+  const [signed, setSigned] = useState(false); const [docChecked, setDocChecked] = useState(false);
+  const [method, setMethod] = useState('Documento de identidad presentado y verificado en persona');
+  useEffect(() => {
+    sb.from('biometric_consents').select('id').eq('employee_id', emp.id).is('withdrawn_at', null).order('accepted_at', { ascending: false }).limit(1)
+      .then(({ data }) => setConsentId(data?.[0]?.id ?? null));
+  }, [sb, emp.id]);
+  if (consentId === undefined) return <p>Cargando…</p>;
+  return (
+    <div style={{ width: 'min(480px, 94vw)', display: 'grid', gap: 10, textAlign: 'left' }}>
+      <h2 style={{ margin: 0 }}>{emp.first_name} {emp.last_name} <span className="muted">#{emp.employee_code}</span></h2>
+      {consentId ? <p>✅ Consentimiento biométrico vigente registrado.</p> : (
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 24, height: 24 }} checked={signed} onChange={(e) => setSigned(e.target.checked)} />
+          La persona firmó el consentimiento para el uso de su rostro en el control de asistencia.</label>
+      )}
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 24, height: 24 }} checked={docChecked} onChange={(e) => setDocChecked(e.target.checked)} />
+        Verifiqué su identidad con el documento original.</label>
+      <input value={method} onChange={(e) => setMethod(e.target.value)} style={{ letterSpacing: 0, textTransform: 'none', fontSize: 16, textAlign: 'left' }} />
+      <button className="btn primary" disabled={!docChecked || (!consentId && !signed)} onClick={async () => {
+        setErr(null);
+        let cid = consentId;
+        if (!cid) {
+          const { data: u } = await sb.auth.getUser();
+          const { data, error } = await sb.from('biometric_consents').insert({ organization_id: org, employee_id: emp.id, legal_basis: 'consentimiento_expreso',
+            notice_version: 'v1', accepted_at: new Date().toISOString(), evidence_ref: 'Firmado en sede central (registrado en app)', recorded_by: u.user?.id }).select('id').single();
+          if (error || !data) return setErr('No se pudo registrar el consentimiento: ' + (error?.message ?? ''));
+          cid = data.id;
+        }
+        onReady(cid!, method);
+      }}>Continuar a la captura</button>
+      <button className="btn small" onClick={onBack}>Volver</button>
+    </div>
+  );
+}
+
+function Capture({ sb, org, emp, consentId, identity, setErr, onDone, onBack }: {
+  sb: SupabaseClient; org: string; emp: Emp; consentId: string; identity: string; setErr: (e: string | null) => void; onDone: (m: string) => void; onBack: () => void;
+}) {
+  const video = useRef<HTMLVideoElement | null>(null);
+  const [hint, setHint] = useState('Preparando cámara…');
+  const [count, setCount] = useState(0);
+  const [challenge, setChallenge] = useState<string | null>(null);
+  useEffect(() => {
+    let stop = false;
+    (async () => {
+      const eng = await getEngine();
+      const samples: Float32Array[] = []; const pads: number[] = []; const quality: unknown[] = [];
+      // Prueba de vida activa antes de capturar.
+      const ch = new ActiveChallenge(randomChallenge());
+      setChallenge(CHALLENGE_TEXT[ch.kind]);
+      const t0 = performance.now(); let ok = false;
+      while (!stop && performance.now() - t0 < 15000) {
+        const v = video.current; if (!v || v.readyState < 2) { await sleep(100); continue; }
+        const f = await eng.detector.detect(v, performance.now());
+        if (f.length === 1 && ch.update(f[0]!)) { ok = true; break; }
+      }
+      setChallenge(null);
+      if (stop) return;
+      if (!ok) { setErr('No se completó la prueba de vida. Intente de nuevo.'); return onBack(); }
+      while (!stop && samples.length < SAMPLES) {
+        const v = video.current; if (!v) { await sleep(100); continue; }
+        const a = await eng.analyze(v, performance.now());
+        if (!a.quality.ok || !a.aligned) { setHint(QUALITY_MESSAGE[a.quality.issues[0]!]); await sleep(80); continue; }
+        const emb = await eng.embed(a.aligned);
+        // Evita muestras casi idénticas consecutivas: se pide una ligera variación.
+        if (samples.length && Math.max(...samples.map((s) => s.reduce((acc, x, i) => acc + x * emb[i]!, 0))) > 0.995) { setHint('Mueva levemente la cabeza'); await sleep(150); continue; }
+        samples.push(emb); pads.push(await eng.liveness.score(v, a.faces[0]!)); quality.push(a.quality.metrics);
+        setCount(samples.length); setHint('Muestra guardada');
+        await sleep(400);
+      }
+      if (stop) return;
+      const pad = pads.reduce((x, y) => x + y, 0) / pads.length;
+      if (pad < PAD_ENROLL_MIN) { setErr(`Prueba de vida pasiva insuficiente (${pad.toFixed(2)}). Mejore la luz e intente de nuevo.`); return onBack(); }
+      // Consistencia: todas las muestras deben ser de la misma persona.
+      const mean = FreeFaceRecognitionAdapter.average(samples);
+      const minSim = Math.min(...samples.map((s) => s.reduce((acc, x, i) => acc + x * mean[i]!, 0)));
+      if (minSim < 0.6) { setErr('Las muestras no son consistentes. Repita la captura.'); return onBack(); }
+      setHint('Comprobando duplicados…');
+      const { data: model } = await sb.from('model_versions').select('id').eq('name', 'sface').eq('version', '2021dec').single();
+      const enc = samples.map(b64);
+      const { data: dups, error: dErr } = await sb.rpc('check_biometric_duplicate', { p_employee_id: emp.id, p_samples: enc, p_recognition_model_id: model!.id, p_threshold: DUP_THRESHOLD });
+      if (dErr) { setErr('Error al comprobar duplicados: ' + dErr.message); return onBack(); }
+      if ((dups as unknown[]).length) {
+        const d = (dups as { employee_code: string; employee_name: string; score: number }[])[0]!;
+        setErr(`Este rostro ya está enrolado como ${d.employee_name} (#${d.employee_code}, similitud ${d.score.toFixed(2)}). Enrolamiento bloqueado; revise con administración.`);
+        return onBack();
+      }
+      const { data: central } = await sb.rpc('central_store_for', { p_org: org });
+      if (!central) { setErr('La organización no tiene una sede central activa. Márquela en el panel (Sedes y tiendas).'); return onBack(); }
+      const { data: padModel } = await sb.from('model_versions').select('id').eq('kind', 'pad').eq('name', 'minifasnet-v2+v1se').maybeSingle();
+      const { error } = await sb.rpc('enroll_biometric', {
+        p_employee_id: emp.id, p_consent_id: consentId, p_store_id: central, p_identity_method: identity, p_samples: enc,
+        p_quality: { samples: quality, minConsistency: +minSim.toFixed(3), engine: eng.label, challenge: ch.kind }, p_pad_passed: true, p_pad_score: pad,
+        p_recognition_model_id: model!.id, p_pad_model_id: padModel?.id ?? null,
+      });
+      if (error) { setErr('No se pudo guardar: ' + error.message); return onBack(); }
+      onDone(`✅ ${emp.first_name} ${emp.last_name} enrolado (${SAMPLES} muestras, prueba de vida ${pad.toFixed(2)}). Los teléfonos de su tienda lo recibirán en la próxima sincronización.`);
+    })();
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <>
+      <p style={{ fontSize: 20, margin: 0 }}>{emp.first_name} {emp.last_name}</p>
+      <Camera onVideo={(v) => { video.current = v; }} />
+      {challenge && <p style={{ fontSize: 28, fontWeight: 800, color: 'var(--warn)', margin: 0 }}>{challenge}</p>}
+      <p style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{hint}</p>
+      <p>Muestras: {count} / {SAMPLES}</p>
+      <button className="btn small" onClick={onBack}>Cancelar</button>
+    </>
+  );
+}

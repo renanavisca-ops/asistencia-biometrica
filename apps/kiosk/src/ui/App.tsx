@@ -10,6 +10,7 @@ import { Camera } from './Camera.tsx';
 import { formatCode, normalizeCode } from './activationCode.ts';
 import { FaceCapture, type CaptureOutcome } from './FaceCapture.tsx';
 import { EngineDiagnostics } from './EngineDiagnostics.tsx';
+import { Enrollment } from './Enrollment.tsx';
 
 type View =
   | { name: 'loading' } | { name: 'setup' } | { name: 'home' } | { name: 'capture' }
@@ -31,6 +32,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   const [syncInfo, setSyncInfo] = useState<string>('');
   const [admin, setAdmin] = useState(false);
   const [diag, setDiag] = useState(false);
+  const [enroll, setEnroll] = useState(false);
   const attempt = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -114,7 +116,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
     <div className="footer" onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => { const t = setTimeout(() => setAdmin(true), 3000); const up = () => { clearTimeout(t); e.currentTarget?.removeEventListener('pointerup', up); }; e.currentTarget.addEventListener('pointerup', up); }}>
       <span>{st.storeName}</span>
-      <span>{counts?.pending ? `${counts.pending} pendientes` : 'al día'} · v{st.policy.version}</span>
+      <span>{counts?.pending ? `${counts.pending} pendientes` : 'al día'} · v{st.policy.version} · ⚙ mantener 3 s</span>
     </div>
   );
 
@@ -173,6 +175,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
       )}
       {footer}
       {diag && <EngineDiagnostics onClose={() => setDiag(false)} />}
+      {enroll && st && <Enrollment organizationId={st.organizationId} onClose={() => { setEnroll(false); runSync(); }} />}
       {admin && st && (
         <div className="overlay" role="dialog" aria-label="Estado del dispositivo">
           <h1>Estado del teléfono</h1>
@@ -189,6 +192,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
           </tbody></table>
           <button className="btn primary" onClick={runSync}>Sincronizar ahora</button>
           <button className="btn" onClick={() => { setAdmin(false); setDiag(true); }}>Diagnóstico del motor</button>
+          <button className="btn" onClick={() => { setAdmin(false); setEnroll(true); }}>Enrolamiento (administrador)</button>
           <button className="btn small" onClick={() => setAdmin(false)}>Cerrar</button>
         </div>
       )}

@@ -2,17 +2,38 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import { back, s } from '@/lib/actions';
 import { humanError } from '@/lib/context';
+import { revalidatePath } from 'next/cache';
 
-export async function createEmployee(fd: FormData) {
+export type CreateEmployeeState = {
+  status: 'idle' | 'error' | 'ok';
+  message?: string;
+  field?: 'first_name' | 'last_name' | 'document_number' | 'store_id' | null;
+  values?: Record<string, string>;
+  created?: { id: string; code: string; name: string };
+};
+
+const FIELDS = ['first_name', 'last_name', 'document_type', 'document_country', 'document_number', 'hired_on', 'store_id'] as const;
+
+/** Alta sin salir del listado: conserva lo escrito y señala el campo con error. */
+export async function createEmployee(_prev: CreateEmployeeState, fd: FormData): Promise<CreateEmployeeState> {
+  const values = Object.fromEntries(FIELDS.map((k) => [k, (fd.get(k) as string | null) ?? '']));
   const sb = await supabaseServer();
   const { data, error } = await sb.rpc('create_employee', {
     p_org: s(fd, 'org'), p_first_name: s(fd, 'first_name'), p_last_name: s(fd, 'last_name'),
     p_document_type: s(fd, 'document_type'), p_document_country: s(fd, 'document_country'), p_document_number: s(fd, 'document_number'),
     p_hired_on: s(fd, 'hired_on'), p_store_id: s(fd, 'store_id'),
   });
-  if (error || !data) back('/employees', fd, error, '');
+  if (error || !data) {
+    const msg = humanError(error);
+    const field = /documento|DPI|dígitos/i.test(msg) ? 'document_number' : /Nombre y apellido/i.test(msg) ? 'first_name'
+      : /sede|tienda|asignación/i.test(msg) ? 'store_id' : null;
+    return { status: 'error', message: msg, field, values };
+  }
   const r = data as { id: string; employeeCode: string };
-  back(`/employees/${r.id}`, fd, null, `Empleado creado con código ${r.employeeCode}`);
+  revalidatePath('/employees');
+  return { status: 'ok', created: { id: r.id, code: r.employeeCode, name: `${values.first_name} ${values.last_name}`.trim() },
+    // Conserva tipo, país y sede para dar de alta al siguiente más rápido.
+    values: { document_type: values.document_type, document_country: values.document_country, store_id: values.store_id } };
 }
 
 export async function updateEmployee(fd: FormData) {

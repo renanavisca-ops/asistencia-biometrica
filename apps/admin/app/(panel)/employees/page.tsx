@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
-import { createEmployee } from './actions';
-import { COUNTRIES, DOC_TYPES } from '@/lib/documents';
+import { CreateEmployeeForm } from './CreateEmployeeForm';
 
 const STATUS: Record<string, string> = { active: 'Activo', suspended: 'Suspendido', terminated: 'Baja' };
 
@@ -25,6 +24,13 @@ export default async function Employees({ searchParams }: { searchParams: SP }) 
       <h2>Empleados</h2>
       <Flash sp={sp} />
       {error && <div className="msg error">{error.message}</div>}
+      {orgWide('employee.manage') && (
+        <div className="card">
+          <h3>Alta de empleado</h3>
+          <p className="muted">El código se asigna automáticamente (único en el negocio y se conserva en traslados). El documento se guarda cifrado; el sistema impide registrar dos veces el mismo. El alta no incluye biometría: el enrolamiento facial se hace después, en la sede central.</p>
+          <CreateEmployeeForm org={org.id} stores={(stores ?? []) as never} defaultCountry={defaultCountry} />
+        </div>
+      )}
       <form className="inline card" method="get">
         <OrgField org={org.id} />
         <label>Buscar<input name="q" defaultValue={sp.q} placeholder="nombre o código" /></label>
@@ -44,23 +50,6 @@ export default async function Employees({ searchParams }: { searchParams: SP }) 
           );
         })}
       </tbody></table>
-      {orgWide('employee.manage') && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3>Alta de empleado</h3>
-          <p className="muted">El código se asigna automáticamente (único en el negocio y se conserva en traslados). El documento se guarda cifrado; el sistema impide registrar dos veces el mismo. El alta no incluye biometría: el enrolamiento facial se hace después, en la sede central.</p>
-          <form action={createEmployee} className="inline">
-            <OrgField org={org.id} />
-            <label>Nombre(s)<input name="first_name" required /></label>
-            <label>Apellido(s)<input name="last_name" required /></label>
-            <label>Tipo de documento<select name="document_type" defaultValue="DPI">{DOC_TYPES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-            <label>País del documento<select name="document_country" defaultValue={defaultCountry}>{COUNTRIES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-            <label>Número de documento<input name="document_number" required autoComplete="off" placeholder="p. ej. 2563 41234 0101" /></label>
-            <label>Fecha de ingreso<input type="date" name="hired_on" /></label>
-            <label>Sede asignada<select name="store_id"><option value="">(asignar después)</option>{(stores ?? []).filter((st) => !st.is_central).map((st) => <option key={st.id} value={st.id}>{st.code} · {st.name}</option>)}{(stores ?? []).filter((st) => st.is_central).map((st) => <option key={st.id} value={st.id}>{st.code} · {st.name} (sede central)</option>)}</select></label>
-            <button>Crear</button>
-          </form>
-        </div>
-      )}
     </>
   );
 }

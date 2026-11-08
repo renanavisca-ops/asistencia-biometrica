@@ -2,11 +2,11 @@
 
 | Área | Estado | Evidencia |
 |---|---|---|
-| Fase 0 — descubrimiento de conectores | Completado | Ver docs/CONNECTORS_AND_INFRASTRUCTURE.md (pendiente de redactar) |
-| Supabase: reutilizar proyecto `grsezvfrkxzurgelyujv` (antes "Centro de Capacitacion") | **En curso** | Restaurado y ACTIVE_HEALTHY. Limpieza del esquema anterior pendiente de confirmación en el servidor MCP |
-| Repositorio GitHub | **Bloqueado** | Lo debe crear el propietario: `renanavisca-ops/asistencia-biometrica` (privado, vacío) |
+| Fase 0 — descubrimiento de conectores | Completado | docs/CONNECTORS_AND_INFRASTRUCTURE.md |
+| Supabase `grsezvfrkxzurgelyujv` | Completado | Contenido anterior borrado; 3 migraciones aplicadas (MD5 verificados) |
+| Repositorio GitHub + CI | Completado | `renanavisca-ops/asistencia-biometrica`, workflow .github/workflows/ci.yml |
 | packages/core (motor IN/OUT, sesiones, firma Ed25519, reloj, matching 1:N, protocolo) | Completado | 31 pruebas vitest OK, typecheck OK |
-| Migraciones SQL + RLS | No iniciado | — |
+| Migraciones SQL + RBAC/RLS + ingesta + correcciones | Completado | 45 comprobaciones en supabase/tests/10_rls_and_ingest.sql (`pnpm test:db`) |
 | Edge Functions (device-activate, device-sync, admin-enroll) | No iniciado | — |
 | Panel admin (Next.js) | No iniciado | — |
 | App de tienda (Capacitor) | No iniciado | — |

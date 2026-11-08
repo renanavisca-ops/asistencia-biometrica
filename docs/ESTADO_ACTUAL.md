@@ -15,7 +15,7 @@ Verificado directamente en código, base de datos y pruebas (no en el resumen).
 | **Reconocimiento facial** | ❌ No existe | Motor `SIMULADO@0` con selección manual (solo pruebas) |
 | **Prueba de vida** | ❌ No existe | — |
 | **Enrolamiento facial central** | ⚠️ Solo backend | `enroll_biometric` (sede central, consentimiento, PAD, 3–10 muestras); sin captura |
-| Modo quiosco completo | ⚠️ Parcial | FLAG_SECURE, pantalla encendida, sin backup; falta Lock Task |
+| Protecciones de la app (sin quiosco bloqueado, por decisión) | ⚠️ Parcial | FLAG_SECURE, sin backup en la nube; faltan PIN de encargado, root/integridad, alertas |
 | Marcación supervisada | ❌ No existe | El esquema lo admite (`source = supervised_exception`) |
 | iOS | ❌ No iniciado | Requiere macOS + Apple Developer |
 | Exportación Excel nativa (.xlsx) | ⚠️ CSV compatible con Excel | — |

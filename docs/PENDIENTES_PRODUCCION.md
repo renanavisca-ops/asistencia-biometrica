@@ -8,4 +8,4 @@ Bloqueantes (el sistema NO puede usarse para control laboral real hasta resolver
 5. Revisión legal por país (Centroamérica): base legal, aviso, retención, alternativa no biométrica.
 6. Marcación supervisada (alternativa para quien no puede ser reconocido).
 
-Importantes: modo quiosco completo; borrado automático de documento en derecho de supresión; rotación de claves; limitación de frecuencia por IP en `device-api`; plan Vercel comercial; respaldos/PITR; iOS.
+Importantes: protecciones de la app sin modo quiosco (decisión del propietario); borrado verificable de los datos de prueba antes de operar; borrado automático de documento en derecho de supresión; rotación de claves; limitación de frecuencia por IP en `device-api`; plan Vercel comercial; respaldos/PITR; iOS.

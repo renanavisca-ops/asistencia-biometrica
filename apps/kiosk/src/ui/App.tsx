@@ -231,7 +231,7 @@ function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
 }
 
 function BioFail({ o, onRetry, onHome }: { o: CaptureOutcome; onRetry: () => void; onHome: () => void }) {
-  useEffect(() => { const t = setTimeout(onHome, 8000); return () => clearTimeout(t); }, [onHome]);
+  useEffect(() => { const t = setTimeout(onHome, 15000); return () => clearTimeout(t); }, [onHome]);
   const MSG: Record<string, [string, string]> = {
     not_recognized: ['No reconocido', 'No se encontró coincidencia con el personal autorizado de esta tienda. Intente de nuevo con buena luz, mirando de frente.'],
     liveness_failed: ['Verificación no superada', 'No se pudo comprobar que hay una persona real frente a la cámara. Siga las indicaciones en pantalla e intente de nuevo.'],

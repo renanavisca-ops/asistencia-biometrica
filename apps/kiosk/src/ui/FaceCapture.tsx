@@ -52,6 +52,7 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
           setHint('No se mueva…');
           embs.push(await eng.embed(a.aligned));
           pads.push(await eng.liveness.score(v, a.faces[0]!));
+          await sleep(60); // fotograma nuevo y repintado de la pantalla
         }
         return embs.length < n ? null : { emb: FreeFaceRecognitionAdapter.average(embs), pad: pads.reduce((x, y) => x + y, 0) / pads.length };
       };
@@ -70,10 +71,14 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
         let done = false;
         while (timeLeft() && performance.now() - tc < policy.challengeTimeoutSec * 1000) {
           const v = video.current;
-          if (!v) { await sleep(50); continue; }
+          if (!v || v.readyState < 2) { await sleep(50); continue; }
+          // Ceder el hilo en CADA vuelta: sin esto la pantalla no se repinta (no se ve la instrucción)
+          // y la cámara no entrega fotogramas nuevos, así que el desafío nunca se cumple.
+          await sleep(30);
           const faces = await eng.detector.detect(v, performance.now());
           if (faces.length !== 1) { setHint(faces.length ? 'Solo una persona frente a la cámara' : 'No se aleje de la cámara'); continue; }
-          setHint('');
+          const left = Math.ceil(policy.challengeTimeoutSec - (performance.now() - tc) / 1000);
+          setHint(`${left} s`);
           if (ch.update(faces[0]!)) { done = true; break; }
         }
         setChallengeText(null);

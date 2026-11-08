@@ -31,6 +31,7 @@ export function EngineDiagnostics({ onClose }: { onClose: () => void }) {
     const t0 = performance.now();
     while (performance.now() - t0 < 8000) {
       const v = video.current; if (!v) break;
+      await new Promise((r) => setTimeout(r, 30)); // ceder el hilo: repintado y fotograma nuevo
       const f = await eng.detector.detect(v, performance.now());
       if (f.length === 1) {
         const b = f[0]!.blink, y = poseFromFive(f[0]!).yawRatio;

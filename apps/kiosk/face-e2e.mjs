@@ -39,6 +39,9 @@ for (const [emp, key] of process.env.NEGATIVE ? [[B, 'b']] : [[A, 'a'], [B, 'b']
     await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ADMIN, aal: 'aal2' })}, true)`;
     const [c] = await tx`insert into public.biometric_consents (organization_id, employee_id, legal_basis, notice_version, accepted_at, recorded_by) values (${ORG}, ${emp}, 'consentimiento_expreso', 'PRUEBA', now(), ${ADMIN}) returning id`;
     const [m] = await tx`select id from public.model_versions where name = 'sface' and version = '2021dec'`;
+    const doc = emp === A ? '1111111111111' : '2222222222222';
+    await tx`select public.set_employee_document(${emp}::uuid, 'DPI', 'GT', ${doc}, 'prueba automatizada')`;
+    await tx`select public.verify_employee_document(${emp}::uuid, ${doc})`;
     await tx`select public.enroll_biometric(${emp}::uuid, ${c.id}::uuid, ${HQ}::uuid, 'prueba automatizada', ${tx.array(tpl[key])}::text[], '{}'::jsonb, true, null, ${m.id}::uuid, null)`;
   });
 }
@@ -49,13 +52,15 @@ await build({ root: kroot, logLevel: 'error', build: { outDir: 'dist-e2e' } });
 const server = await preview({ root: kroot, preview: { port: 5198, strictPort: true, proxy: { '/device-api': process.env.DEVICE_API } }, build: { outDir: 'dist-e2e' }, logLevel: 'error' });
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${videoFile}`] });
 const page = await browser.newPage({ viewport: { width: 400, height: 820 } });
-page.on('pageerror', (e) => console.error('pageerror', e.message));
+page.on('pageerror', (e) => console.error('pageerror', e.message)); page.on('console', (m) => { if (!m.text().includes('onnxruntime')) console.error('console', m.type(), m.text().slice(0, 300)); }); page.on('response', (r) => { if (r.status() >= 400) console.error('http', r.status(), r.url()); }); page.on('requestfailed', (r) => console.error('reqfail', r.url()));
 await page.goto('http://127.0.0.1:5198/');
 await page.fill('input', 'face-2345-face'); await page.click('button:has-text("Activar")');
-await page.waitForSelector('text=Toque la pantalla', { timeout: 30000 });
+await page.waitForSelector('text=Toque la pantalla', { timeout: 30000 }).catch(async (e) => { console.error('PANTALLA:', (await page.textContent('body'))?.slice(0, 600)); throw e; });
 await page.waitForTimeout(3000); // sincronización inicial (roster con plantillas)
 const t0 = Date.now();
 await page.click('text=Toque la pantalla');
+// La instrucción del desafío debe llegar a pintarse en pantalla (antes el bucle bloqueaba el repintado).
+const challengeShown = page.waitForSelector('text=/Parpadee|Gire un poco/', { timeout: 30000 }).then(() => true, () => false);
 const outcome = await Promise.race([
   page.waitForSelector('text=ENTRADA REGISTRADA', { timeout: 60000 }).then(() => 'ENTRADA'),
   page.waitForSelector('text=No reconocido', { timeout: 60000 }).then(() => 'NO_RECONOCIDO'),
@@ -69,7 +74,9 @@ await page.screenshot({ path: process.env.SHOT ?? 'face-e2e.png' });
 await page.waitForTimeout(6000); // sincronización tras la marcación
 const ev = await sql`select e.first_name || ' ' || e.last_name n, a.event_type, a.status, a.recognition_model, a.match_score, a.match_margin, a.review_reasons from public.attendance_events a join public.employees e on e.id = a.employee_id where a.organization_id = ${ORG}`;
 await browser.close(); await new Promise((r) => server.httpServer.close(r)); await sql.end();
-console.log(JSON.stringify({ outcome, elapsedMs: elapsed, screen: name?.replace(/\s+/g, ' '), events: ev }, null, 1));
+console.log(JSON.stringify({ outcome, challengeShown: await challengeShown, elapsedMs: elapsed, screen: name?.replace(/\s+/g, ' '), events: ev }, null, 1));
+const policyActive = !process.env.POLICY || JSON.parse(process.env.POLICY).activeChallenge !== 0;
+if (policyActive && outcome === 'PRUEBA_DE_VIDA_FALLIDA' && !(await challengeShown)) { console.log('FALLO: la instrucción del desafío nunca se mostró en pantalla'); process.exit(1); }
 if (process.env.EXPECT_OUTCOME) {
   const ok = outcome === process.env.EXPECT_OUTCOME && ev.length === 0;
   console.log(ok ? `OK: resultado esperado ${outcome}, ninguna marcación registrada` : `FALLO: esperado ${process.env.EXPECT_OUTCOME}, obtenido ${outcome} con ${ev.length} eventos`);

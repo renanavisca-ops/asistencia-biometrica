@@ -30,3 +30,4 @@ Estados: **Prototipo funcional → Piloto controlado → Validado para producci�
 
 ## Avance
 - **Etapa 1 (2026-11-08): completada como prototipo.** Motor en la app (WebAssembly; mismo código servirá para iOS), interfaces intercambiables (`apps/kiosk/src/infra/biometric/`), adaptadores comerciales vacíos, identificación automática, diagnóstico del motor para el encargado, modelos con SHA-256 fijo, APK 0.2.0 (66 MB). Mientras nadie de una tienda tenga plantilla del motor real, la app ofrece el modo prueba transitorio (selección manual etiquetada).
+- **Etapa 2 (2026-11-08): completada como prototipo.** Prueba de vida pasiva (MiniFASNet convertido y verificado) + desafío activo aleatorio + continuidad de identidad; enfriamiento por intentos fallidos y conteos en el informe de salud; política configurable en el panel; 6 escenarios E2E (`scripts/test-face-e2e.sh`). Pendiente: medición física con fotos, pantallas y vídeos en el teléfono.

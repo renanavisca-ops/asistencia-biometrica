@@ -10,6 +10,8 @@ const FIELDS: [keyof typeof DEFAULT_POLICY, string][] = [
   ['pauseMinMinutes', 'Pausa/almuerzo: mínimo (min)'], ['pauseMaxMinutes', 'Pausa/almuerzo: máximo (min); más es otra jornada'], ['longSessionHours', 'Permanencia larga: aviso (h)'],
   ['staleSessionHours', 'Sesión caducada: siguiente marca = ENTRADA (h)'], ['offlineMaxHours', 'Máx. horas sin sincronizar antes de bloquear (0 = no bloquear)'],
   ['leaseHours', 'Validez de autorización de empleados sin renovar (h)'], ['serverTimeStaleHours', 'Horas sin hora de servidor → hora dudosa'],
+  ['activeChallenge', 'Desafío activo de prueba de vida (1 = sí, recomendado; 0 = solo pasiva, menos seguro)'],
+  ['challengeTimeoutSec', 'Segundos para completar el desafío (parpadeo/giro)'],
   ['maxFailedAttempts', 'Intentos fallidos antes de pausa'], ['cooldownSec', 'Pausa tras intentos fallidos (s)'], ['confirmationSec', 'Duración de la confirmación (s)'],
 ];
 
@@ -32,7 +34,12 @@ export default async function Settings({ searchParams }: { searchParams: SP }) {
             {FIELDS.map(([k, label]) => <label key={k}>{label}<input name={k} type="number" step="1" min="0" required defaultValue={String(current[k] ?? DEFAULT_POLICY[k])} /></label>)}
             <label>Umbral de coincidencia (vacío = sin calibrar)<input name="matchThreshold" type="number" step="0.0001" defaultValue={current.matchThreshold ?? ''} /></label>
             <label>Margen mínimo entre candidatos<input name="matchMargin" type="number" step="0.0001" defaultValue={current.matchMargin ?? ''} /></label>
-            <label>Umbral prueba de vida (PAD)<input name="padThreshold" type="number" step="0.0001" defaultValue={current.padThreshold ?? ''} /></label>
+            <label>Umbral prueba de vida pasiva (prob. «real», 0–1)<input name="padThreshold" type="number" step="0.0001" defaultValue={current.padThreshold ?? ''} /></label>
+            <div className="muted" style={{ gridColumn: '1 / -1', fontSize: 12 }}>
+              Motor gratuito EXPERIMENTAL (sface@2021dec + MiniFASNet). Sin calibrar con datos propios. Valores <b>provisionales solo para pruebas</b>:
+              coincidencia 0.40, margen 0.08, prueba de vida 0.80. Se reemplazarán por los calibrados con voluntarios (Etapa 4).
+              Mientras estén vacíos, los teléfonos <b>no reconocen a nadie</b> (por diseño).
+            </div>
             <div><button>Publicar nueva versión</button></div>
           </form>
         ) : <pre className="mono">{JSON.stringify(current, null, 2)}</pre>}

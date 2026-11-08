@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCode, normalizeCode } from '../src/ui/App.tsx';
+import { formatCode, normalizeCode } from '../src/ui/activationCode.ts';
 
 describe('código de activación', () => {
   it('normaliza mayúsculas, guiones y espacios', () => {

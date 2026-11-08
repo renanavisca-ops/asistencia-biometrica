@@ -28,7 +28,7 @@ await sql.unsafe(`
   insert into public.admin_role_grants (user_id, role, organization_id) values ('${ADMIN}', 'central_admin', '${ORG}');
   insert into public.model_versions (kind, name, version, license, embedding_dim, status) values ('recognition', 'sface', '2021dec', 'Apache-2.0 pesos; datos no verificados (EXPERIMENTAL)', 128, 'evaluation') on conflict do nothing;
   -- Umbral PROVISIONAL solo para esta prueba (la calibración real es la Etapa 4).
-  insert into public.device_policy_versions (organization_id, version, policy) values ('${ORG}', 1, '{"matchThreshold": 0.5, "matchMargin": 0.1, "minSessionMinutes": 30}');
+  insert into public.device_policy_versions (organization_id, version, policy) values ('${ORG}', 1, '${process.env.POLICY ?? '{"matchThreshold": 0.4, "matchMargin": 0.08, "padThreshold": 0.8, "activeChallenge": 1, "challengeTimeoutSec": 6}'}');
   insert into public.devices (id, organization_id, store_id, label) values ('${DEV}', '${ORG}', '${S1}', 'Tel S1');
   insert into public.device_enrollments (organization_id, device_id, code_hash, expires_at) values ('${ORG}', '${DEV}', encode(extensions.digest('FACE2345FACE', 'sha256'), 'hex'), now() + interval '1 hour');
 `);
@@ -61,6 +61,7 @@ const outcome = await Promise.race([
   page.waitForSelector('text=No reconocido', { timeout: 60000 }).then(() => 'NO_RECONOCIDO'),
   page.waitForSelector('text=Enrolamiento facial pendiente', { timeout: 60000 }).then(() => 'SIN_PLANTILLAS'),
   page.waitForSelector('text=sin calibrar', { timeout: 60000 }).then(() => 'SIN_CALIBRAR'),
+  page.waitForSelector('text=Verificación no superada', { timeout: 60000 }).then(() => 'PRUEBA_DE_VIDA_FALLIDA'),
 ]);
 const elapsed = Date.now() - t0;
 const name = outcome === 'ENTRADA' ? await page.textContent('[role=status]') : null;
@@ -69,6 +70,11 @@ await page.waitForTimeout(6000); // sincronización tras la marcación
 const ev = await sql`select e.first_name || ' ' || e.last_name n, a.event_type, a.status, a.recognition_model, a.match_score, a.match_margin, a.review_reasons from public.attendance_events a join public.employees e on e.id = a.employee_id where a.organization_id = ${ORG}`;
 await browser.close(); await new Promise((r) => server.httpServer.close(r)); await sql.end();
 console.log(JSON.stringify({ outcome, elapsedMs: elapsed, screen: name?.replace(/\s+/g, ' '), events: ev }, null, 1));
+if (process.env.EXPECT_OUTCOME) {
+  const ok = outcome === process.env.EXPECT_OUTCOME && ev.length === 0;
+  console.log(ok ? `OK: resultado esperado ${outcome}, ninguna marcación registrada` : `FALLO: esperado ${process.env.EXPECT_OUTCOME}, obtenido ${outcome} con ${ev.length} eventos`);
+  process.exit(ok ? 0 : 1);
+}
 if (process.env.NEGATIVE) {
   if (outcome !== 'NO_RECONOCIDO' || ev.length !== 0) { console.error('FALLO: persona no enrolada no fue rechazada'); process.exit(1); }
   console.log('OK: persona no enrolada rechazada («No reconocido»), sin registrar marcación'); process.exit(0);

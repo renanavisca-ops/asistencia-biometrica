@@ -25,6 +25,17 @@ export const MODELS = [
 
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 
+// Modelos versionados en el repositorio (convertidos por nosotros; ver apps/kiosk/models-src/README.md).
+const LOCAL = [
+  { file: 'minifasnet_v2_2.7.onnx', sha256: 'fbac1f5cfa6d2072099fb5d575ac0635eb48b8591dfbcf0835247faaf1602c87' },
+  { file: 'minifasnet_v1se_4.0.onnx', sha256: '4830dae96b69050bb513d5f4ee48cb1bbb4a3809fe169effddd19dbd28eeb1fb' },
+];
+for (const m of LOCAL) {
+  const buf = readFileSync(join(kiosk, 'models-src', m.file));
+  if (sha(buf) !== m.sha256) throw new Error(`SHA-256 inesperado para ${m.file}`);
+  writeFileSync(join(out, m.file), buf);
+}
+
 for (const m of MODELS) {
   const dest = join(out, m.file);
   if (existsSync(dest) && sha(readFileSync(dest)) === m.sha256) continue;

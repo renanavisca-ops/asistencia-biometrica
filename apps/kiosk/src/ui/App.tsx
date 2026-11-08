@@ -5,7 +5,9 @@ import { KioskService, nextBackoffMs, type PunchResult } from '../domain/kiosk.t
 import type { DeviceState, LocalEventStatus } from '../domain/store.ts';
 import { simulatedIdentification } from '../infra/biometric/engine.ts';
 import { getEngine } from '../infra/biometric/index.ts';
+import { cooldownRemainingSec, recordFailure, recordSuccess } from '../infra/biometric/attempts.ts';
 import { Camera } from './Camera.tsx';
+import { formatCode, normalizeCode } from './activationCode.ts';
 import { FaceCapture, type CaptureOutcome } from './FaceCapture.tsx';
 import { EngineDiagnostics } from './EngineDiagnostics.tsx';
 
@@ -91,7 +93,10 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
     if (result.kind === 'recorded') runSync();
   };
   const onCapture = (o: CaptureOutcome) => {
-    if (o.kind === 'identified') return punchId(o.id);
+    if (o.kind === 'identified') { recordSuccess(); return punchId(o.id); }
+    if (['not_recognized', 'ambiguous', 'liveness_failed', 'timeout'].includes(o.kind) && st) {
+      recordFailure(o.kind === 'liveness_failed' ? `pad_fail_${o.reason}` : o.kind, st.policy.maxFailedAttempts, st.policy.cooldownSec);
+    }
     // Transición: si nadie de la tienda tiene plantillas del motor real (enrolamiento pendiente), se permite el modo prueba etiquetado.
     if (o.kind === 'no_templates') return setView({ name: 'test_picker' });
     setView({ name: 'bio_fail', outcome: o });
@@ -116,7 +121,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   return (
     <>
       {view.name !== 'loading' && (
-        <div className="banner-test">PRUEBA — reconocimiento experimental · sin prueba de vida · no apto para uso real</div>
+        <div className="banner-test">PRUEBA — reconocimiento y prueba de vida experimentales · no apto para uso real</div>
       )}
       {!persistent && view.name !== 'loading' && <div className="banner-test" style={{ top: 32, background: '#e5484d', color: '#fff' }}>NAVEGADOR: datos no persistentes</div>}
       {view.name === 'loading' && <div className="screen muted">Cargando…</div>}
@@ -125,7 +130,11 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
         <div className="screen"><div className="big">Teléfono bloqueado</div><p className="muted">Este teléfono fue bloqueado o retirado por administración. Los datos de empleados se eliminaron del equipo.</p></div>
       )}
       {view.name === 'home' && (
-        <button className="screen full" style={{ background: 'none', border: 0, color: 'inherit', font: 'inherit' }} onClick={() => setView({ name: 'capture' })} aria-label="Tocar para marcar asistencia">
+        <button className="screen full" style={{ background: 'none', border: 0, color: 'inherit', font: 'inherit' }} onClick={() => {
+          const cd = cooldownRemainingSec();
+          if (cd > 0) { setView({ name: 'bio_fail', outcome: { kind: 'engine_error', message: `cooldown:${cd}` } }); return; }
+          setView({ name: 'capture' });
+        }} aria-label="Tocar para marcar asistencia">
           <h1>Marcar asistencia</h1>
           <div className="big">Toque la pantalla</div>
           <p className="muted">Mire a la cámara cuando se abra. No necesita escribir nada.</p>
@@ -175,7 +184,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
             <tr><td>Aceptados / revisión / rechazados</td><td>{counts?.accepted ?? 0} / {counts?.needs_review ?? 0} / {counts?.rejected ?? 0}</td></tr>
             <tr><td>Personas autorizadas</td><td>{roster.length}</td></tr>
             <tr><td>Política</td><td>v{st.policy.version}</td></tr>
-            <tr><td>Motor biométrico</td><td>sface@2021dec (experimental) · prueba de vida: no implementada</td></tr>
+            <tr><td>Motor biométrico</td><td>sface@2021dec + MiniFASNet + desafío activo (experimentales)</td></tr>
             <tr><td>Dispositivo</td><td style={{ fontFamily: 'monospace', fontSize: 12 }}>{st.deviceId}</td></tr>
           </tbody></table>
           <button className="btn primary" onClick={runSync}>Sincronizar ahora</button>
@@ -186,13 +195,6 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
     </>
   );
 }
-
-// Alfabeto de los códigos de activación (sin O, 0, I, 1, L para evitar confusiones).
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-export function normalizeCode(raw: string) {
-  return raw.toUpperCase().split('').filter((c) => CODE_ALPHABET.includes(c)).join('').slice(0, 12);
-}
-export const formatCode = (n: string) => n.replace(/(.{4})(?=.)/g, '$1-');
 
 function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
   const [code, setCode] = useState('');
@@ -228,11 +230,14 @@ function BioFail({ o, onRetry, onHome }: { o: CaptureOutcome; onRetry: () => voi
   useEffect(() => { const t = setTimeout(onHome, 8000); return () => clearTimeout(t); }, [onHome]);
   const MSG: Record<string, [string, string]> = {
     not_recognized: ['No reconocido', 'No se encontró coincidencia con el personal autorizado de esta tienda. Intente de nuevo con buena luz, mirando de frente.'],
+    liveness_failed: ['Verificación no superada', 'No se pudo comprobar que hay una persona real frente a la cámara. Siga las indicaciones en pantalla e intente de nuevo.'],
+    timeout: ['Tiempo agotado', 'No se logró una captura válida. Colóquese de frente, con buena luz, e intente de nuevo.'],
     ambiguous: ['Intente de nuevo', 'No fue posible distinguir con seguridad. Mire de frente y quédese quieto.'],
     uncalibrated: ['Reconocimiento sin calibrar', 'La administración aún no ha publicado los umbrales del motor. Avise al encargado.'],
     engine_error: ['Error del motor', 'No se pudo iniciar el reconocimiento. Avise al encargado.'],
   };
-  const [t, d] = MSG[o.kind] ?? ['No se registró', ''];
+  const cooldown = o.kind === 'engine_error' && o.message.startsWith('cooldown:') ? o.message.split(':')[1] : null;
+  const [t, d] = cooldown ? ['Espere un momento', `Demasiados intentos fallidos. Puede intentar de nuevo en ${cooldown} s.`] : MSG[o.kind] ?? ['No se registró', ''];
   return (
     <div className="screen full bad" role="alert">
       <div className="big">{t}</div>

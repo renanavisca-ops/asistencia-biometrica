@@ -44,7 +44,7 @@ export function normalizePolicy(p: Record<string, unknown> | null | undefined): 
 export class KioskService {
   private syncing: Promise<SyncResult> | null = null;
 
-  constructor(readonly store: LocalStore, private api: DeviceApi, private platform: Platform) {}
+  constructor(readonly store: LocalStore, private api: DeviceApi, private platform: Platform, private healthFlags: () => string[] = () => []) {}
 
   state() { return this.store.getState(); }
 
@@ -157,7 +157,7 @@ export class KioskService {
           health: {
             pendingEvents: counts.pending, batteryPct: info.batteryPct, freeStorageMb: null, appVersion: this.platform.appVersion,
             osVersion: info.osVersion, recognitionModel: null, padModel: null,
-            clockOffsetMs: st.serverTimeRef ? Math.round(st.serverTimeRef.serverTimeMs - st.serverTimeRef.deviceWallMs) : null, flags: [],
+            clockOffsetMs: st.serverTimeRef ? Math.round(st.serverTimeRef.serverTimeMs - st.serverTimeRef.deviceWallMs) : null, flags: this.healthFlags(),
           },
         });
         await this.store.markEvents(res.acks.map((a) => ({ eventId: a.eventId, status: a.result, reason: a.reason })));

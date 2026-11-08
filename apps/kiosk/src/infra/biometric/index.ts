@@ -3,6 +3,7 @@ import { FreeFaceRecognitionAdapter } from './freeEngine.ts';
 export { FreeFaceRecognitionAdapter } from './freeEngine.ts';
 export { CommercialFaceRecognitionAdapter, CommercialLivenessAdapter } from './commercial.ts';
 export { QUALITY_MESSAGE } from './quality.ts';
+export { ActiveChallenge, CHALLENGE_TEXT, randomChallenge, type ChallengeKind } from './activeChallenge.ts';
 
 /** Motor activo. Hoy solo existe el gratuito (experimental). Los comerciales son interfaces sin proveedor. */
 let engine: FreeFaceRecognitionAdapter | null = null;

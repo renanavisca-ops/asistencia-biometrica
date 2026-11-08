@@ -6,6 +6,7 @@ import { MemoryStore, type LocalStore } from './domain/store.ts';
 import { capacitorPlatform } from './infra/platform.capacitor.ts';
 import { DeviceClock } from './infra/deviceClock.ts';
 import { KioskApp } from './ui/App.tsx';
+import { takeHealthFlags } from './infra/biometric/attempts.ts';
 import './ui/styles.css';
 
 const API = import.meta.env.VITE_DEVICE_API_URL ?? 'https://grsezvfrkxzurgelyujv.supabase.co/functions/v1/device-api';
@@ -20,7 +21,7 @@ async function boot() {
   } else {
     store = new MemoryStore(); // navegador: solo para desarrollo de interfaz
   }
-  const svc = new KioskService(store, new DeviceApi(API, (url, init) => fetch(url, init)), capacitorPlatform);
+  const svc = new KioskService(store, new DeviceApi(API, (url, init) => fetch(url, init)), capacitorPlatform, takeHealthFlags);
   createRoot(document.getElementById('root')!).render(<KioskApp svc={svc} persistent={native} />);
 }
 boot();

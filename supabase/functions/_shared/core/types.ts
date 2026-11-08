@@ -48,6 +48,10 @@ export interface DevicePolicy {
   matchMargin: number;
   /** Umbral mínimo de puntuación PAD (prueba de vida) del modelo activo. */
   padThreshold: number;
+  /** 1 = exigir desafío activo aleatorio (parpadeo/giro) además de la prueba pasiva; 0 = solo pasiva (seguridad reducida). */
+  activeChallenge: number;
+  /** Segundos para completar el desafío activo. */
+  challengeTimeoutSec: number;
   /** Intentos fallidos consecutivos antes de enfriamiento. */
   maxFailedAttempts: number;
   cooldownSec: number;
@@ -69,6 +73,8 @@ export const DEFAULT_POLICY: DevicePolicy = {
   matchThreshold: Number.NaN, // sin calibrar: obliga a configurar por modelo
   matchMargin: Number.NaN,
   padThreshold: Number.NaN,
+  activeChallenge: 1,
+  challengeTimeoutSec: 8,
   maxFailedAttempts: 5,
   cooldownSec: 30,
   confirmationSec: 4,

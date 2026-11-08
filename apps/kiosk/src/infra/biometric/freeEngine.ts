@@ -3,6 +3,7 @@ import { alignFace } from './align.ts';
 import { assessQuality, DEFAULT_QUALITY, imageStats, type QualityPolicy } from './quality.ts';
 import { MediaPipeFaceDetector } from './mediapipeDetector.ts';
 import { SFaceRecognizer } from './sfaceRecognizer.ts';
+import { MiniFasPassiveLiveness } from './passiveLiveness.ts';
 import type { FaceDetector, FaceRecognizer, FrameAnalysis, FrameSource } from './types.ts';
 
 /**
@@ -15,12 +16,14 @@ export class FreeFaceRecognitionAdapter {
   readonly label: string;
   private alignCanvas: HTMLCanvasElement | null = null;
 
-  constructor(readonly detector: FaceDetector = new MediaPipeFaceDetector(), readonly recognizer: FaceRecognizer = new SFaceRecognizer(), readonly quality: QualityPolicy = DEFAULT_QUALITY) {
+  constructor(readonly detector: FaceDetector = new MediaPipeFaceDetector(), readonly recognizer: FaceRecognizer = new SFaceRecognizer(),
+    readonly liveness: MiniFasPassiveLiveness = new MiniFasPassiveLiveness(), readonly quality: QualityPolicy = DEFAULT_QUALITY) {
     this.label = `${recognizer.modelVersion} (experimental)`;
   }
   get modelVersion() { return this.recognizer.modelVersion; }
 
-  async init() { await Promise.all([this.detector.init(), this.recognizer.init()]); }
+  async init() { await Promise.all([this.detector.init(), this.recognizer.init(), this.liveness.init()]); }
+  get padModel() { return this.liveness.id; }
 
   /** Detecta, alinea y evalúa calidad de un fotograma (sin generar embedding). */
   async analyze(src: FrameSource, ts?: number): Promise<FrameAnalysis> {

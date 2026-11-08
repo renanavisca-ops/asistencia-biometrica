@@ -3,12 +3,15 @@ import { App as CapApp } from '@capacitor/app';
 import type { RosterEntry } from '@asistencia/core';
 import { KioskService, nextBackoffMs, type PunchResult } from '../domain/kiosk.ts';
 import type { DeviceState, LocalEventStatus } from '../domain/store.ts';
-import { simulatedEngine, simulatedIdentification } from '../infra/biometric/engine.ts';
+import { simulatedIdentification } from '../infra/biometric/engine.ts';
+import { getEngine } from '../infra/biometric/index.ts';
 import { Camera } from './Camera.tsx';
+import { FaceCapture, type CaptureOutcome } from './FaceCapture.tsx';
+import { EngineDiagnostics } from './EngineDiagnostics.tsx';
 
 type View =
   | { name: 'loading' } | { name: 'setup' } | { name: 'home' } | { name: 'capture' }
-  | { name: 'result'; result: PunchResult } | { name: 'blocked' }
+  | { name: 'result'; result: PunchResult } | { name: 'blocked' } | { name: 'bio_fail'; outcome: CaptureOutcome } | { name: 'test_picker' }
   | { name: 'confirm'; employeeId: string; result: Extract<PunchResult, { kind: 'confirm_early_out' }> };
 
 const fmtTime = (ms: number, tz: string) => new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: tz }).format(new Date(ms));
@@ -25,6 +28,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   const [counts, setCounts] = useState<Record<LocalEventStatus, number> | null>(null);
   const [syncInfo, setSyncInfo] = useState<string>('');
   const [admin, setAdmin] = useState(false);
+  const [diag, setDiag] = useState(false);
   const attempt = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,6 +51,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   }, [svc, refresh]);
 
   useEffect(() => {
+    getEngine().catch(() => {}); // precarga de modelos (local, sin red)
     (async () => {
       const s = await refresh();
       if (!s) return setView({ name: 'setup' });
@@ -76,7 +81,23 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
     return () => clearTimeout(t);
   }, [view]);
 
+  const lastId = useRef<import('../domain/kiosk.ts').Identification | null>(null);
+  const punchId = async (id: import('../domain/kiosk.ts').Identification, confirmEarlyOut = false) => {
+    lastId.current = id;
+    const result = await svc.punch(id, { confirmEarlyOut });
+    if (result.kind === 'confirm_early_out') { setView({ name: 'confirm', employeeId: id.employeeId, result }); return; }
+    setView({ name: 'result', result });
+    refresh();
+    if (result.kind === 'recorded') runSync();
+  };
+  const onCapture = (o: CaptureOutcome) => {
+    if (o.kind === 'identified') return punchId(o.id);
+    // Transición: si nadie de la tienda tiene plantillas del motor real (enrolamiento pendiente), se permite el modo prueba etiquetado.
+    if (o.kind === 'no_templates') return setView({ name: 'test_picker' });
+    setView({ name: 'bio_fail', outcome: o });
+  };
   const punch = async (employeeId: string, confirmEarlyOut = false) => {
+    if (confirmEarlyOut && lastId.current?.employeeId === employeeId) return punchId(lastId.current, true);
     const result = await svc.punch(simulatedIdentification(employeeId), { confirmEarlyOut });
     if (result.kind === 'confirm_early_out') { setView({ name: 'confirm', employeeId, result }); return; }
     setView({ name: 'result', result });
@@ -94,8 +115,8 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
 
   return (
     <>
-      {simulatedEngine.kind === 'simulated' && view.name !== 'loading' && (
-        <div className="banner-test">MODO PRUEBA — SIN BIOMETRÍA · no apto para uso real</div>
+      {view.name !== 'loading' && (
+        <div className="banner-test">PRUEBA — reconocimiento experimental · sin prueba de vida · no apto para uso real</div>
       )}
       {!persistent && view.name !== 'loading' && <div className="banner-test" style={{ top: 32, background: '#e5484d', color: '#fff' }}>NAVEGADOR: datos no persistentes</div>}
       {view.name === 'loading' && <div className="screen muted">Cargando…</div>}
@@ -110,22 +131,25 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
           <p className="muted">Mire a la cámara cuando se abra. No necesita escribir nada.</p>
         </button>
       )}
-      {view.name === 'capture' && (
+      {view.name === 'capture' && st && (
         <div className="screen" style={{ paddingTop: 84, justifyContent: 'flex-start' }}>
-          <Camera />
-          <p aria-live="polite">Centre su rostro en el óvalo, con buena luz.</p>
-          {simulatedEngine.requiresManualSelection && (
-            <>
-              <p className="muted" style={{ fontSize: 14 }}>Modo prueba: seleccione la persona (en producción se identifica sola).</p>
-              <div className="picker">
-                {roster.length === 0 && <p className="muted">Sin personas autorizadas. ¿El teléfono ya sincronizó?</p>}
-                {roster.map((r) => <button key={r.employeeId} className="btn" onClick={() => punch(r.employeeId)}>{r.displayName}</button>)}
-              </div>
-            </>
-          )}
+          <FaceCapture roster={roster} policy={st.policy} onDone={onCapture} />
+          <p className="muted" style={{ fontSize: 15 }}>Centre su rostro en el óvalo, con buena luz. No necesita tocar nada.</p>
           <button className="btn small" onClick={() => setView({ name: 'home' })}>Cancelar</button>
         </div>
       )}
+      {view.name === 'test_picker' && (
+        <div className="screen" style={{ paddingTop: 84, justifyContent: 'flex-start' }}>
+          <Camera />
+          <p style={{ color: 'var(--warn)' }}>Enrolamiento facial pendiente en esta tienda: nadie tiene plantilla del motor real.</p>
+          <p className="muted" style={{ fontSize: 14 }}>MODO PRUEBA (transitorio): seleccione la persona. Desaparece en cuanto exista un enrolamiento real.</p>
+          <div className="picker">
+            {roster.map((r) => <button key={r.employeeId} className="btn" onClick={() => punch(r.employeeId)}>{r.displayName}</button>)}
+          </div>
+          <button className="btn small" onClick={() => setView({ name: 'home' })}>Cancelar</button>
+        </div>
+      )}
+      {view.name === 'bio_fail' && <BioFail o={view.outcome} onRetry={() => setView({ name: 'capture' })} onHome={() => setView({ name: 'home' })} />}
       {view.name === 'result' && <Result r={view.result} tz={st?.timezone ?? 'UTC'} />}
       {view.name === 'confirm' && (
         <div className="screen full warn" role="alertdialog" aria-live="assertive" aria-label="Confirmar salida">
@@ -139,6 +163,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
         </div>
       )}
       {footer}
+      {diag && <EngineDiagnostics onClose={() => setDiag(false)} />}
       {admin && st && (
         <div className="overlay" role="dialog" aria-label="Estado del dispositivo">
           <h1>Estado del teléfono</h1>
@@ -150,10 +175,11 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
             <tr><td>Aceptados / revisión / rechazados</td><td>{counts?.accepted ?? 0} / {counts?.needs_review ?? 0} / {counts?.rejected ?? 0}</td></tr>
             <tr><td>Personas autorizadas</td><td>{roster.length}</td></tr>
             <tr><td>Política</td><td>v{st.policy.version}</td></tr>
-            <tr><td>Motor biométrico</td><td>{simulatedEngine.label} (NO IMPLEMENTADO)</td></tr>
+            <tr><td>Motor biométrico</td><td>sface@2021dec (experimental) · prueba de vida: no implementada</td></tr>
             <tr><td>Dispositivo</td><td style={{ fontFamily: 'monospace', fontSize: 12 }}>{st.deviceId}</td></tr>
           </tbody></table>
           <button className="btn primary" onClick={runSync}>Sincronizar ahora</button>
+          <button className="btn" onClick={() => { setAdmin(false); setDiag(true); }}>Diagnóstico del motor</button>
           <button className="btn small" onClick={() => setAdmin(false)}>Cerrar</button>
         </div>
       )}
@@ -195,6 +221,25 @@ function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
       {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
       <button className="btn primary" disabled={busy || code.length !== 12}>{busy ? 'Activando…' : 'Activar'}</button>
     </form>
+  );
+}
+
+function BioFail({ o, onRetry, onHome }: { o: CaptureOutcome; onRetry: () => void; onHome: () => void }) {
+  useEffect(() => { const t = setTimeout(onHome, 8000); return () => clearTimeout(t); }, [onHome]);
+  const MSG: Record<string, [string, string]> = {
+    not_recognized: ['No reconocido', 'No se encontró coincidencia con el personal autorizado de esta tienda. Intente de nuevo con buena luz, mirando de frente.'],
+    ambiguous: ['Intente de nuevo', 'No fue posible distinguir con seguridad. Mire de frente y quédese quieto.'],
+    uncalibrated: ['Reconocimiento sin calibrar', 'La administración aún no ha publicado los umbrales del motor. Avise al encargado.'],
+    engine_error: ['Error del motor', 'No se pudo iniciar el reconocimiento. Avise al encargado.'],
+  };
+  const [t, d] = MSG[o.kind] ?? ['No se registró', ''];
+  return (
+    <div className="screen full bad" role="alert">
+      <div className="big">{t}</div>
+      <p style={{ fontSize: 22 }}>{d}</p>
+      <p>No se registró ninguna marcación. Si no puede ser reconocido, avise al encargado.</p>
+      <button className="btn" onClick={onRetry}>Intentar de nuevo</button>
+    </div>
   );
 }
 

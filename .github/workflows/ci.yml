@@ -55,9 +55,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: APK de prueba (debug, MODO PRUEBA sin biometría)
         working-directory: apps/kiosk
-        run: pnpm exec vite build && pnpm exec cap sync android && cd android && ./gradlew assembleDebug --no-daemon
+        run: node ../../scripts/fetch-models.mjs && pnpm exec vite build && pnpm exec cap sync android && cd android && ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: asistencia-tienda-debug-apk
           path: apps/kiosk/android/app/build/outputs/apk/debug/*.apk
           retention-days: 14
+  biometric-engine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/fetch-models.mjs
+      - run: npm i -g playwright@1.63.0 && npx -y playwright@1.63.0 install --with-deps chromium
+      - name: Motor biométrico real (MediaPipe + SFace) sobre imágenes públicas
+        working-directory: apps/kiosk
+        run: NODE_PATH=$(npm root -g) node test-biometric-engine.mjs

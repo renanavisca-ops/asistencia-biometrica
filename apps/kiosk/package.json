@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node ../../scripts/fetch-models.mjs && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "android:sync": "vite build && cap sync android",
-    "android:apk": "vite build && cap sync android && cd android && ./gradlew assembleDebug"
+    "android:sync": "node ../../scripts/fetch-models.mjs && vite build && cap sync android",
+    "android:apk": "node ../../scripts/fetch-models.mjs && vite build && cap sync android && cd android && ./gradlew assembleDebug",
+    "models": "node ../../scripts/fetch-models.mjs"
   },
   "dependencies": {
     "@asistencia/core": "workspace:*",
@@ -21,7 +22,9 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "react": "19.1.10",
-    "react-dom": "19.1.10"
+    "react-dom": "19.1.10",
+    "@mediapipe/tasks-vision": "1.1.1",
+    "onnxruntime-web": "1.30.0"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",

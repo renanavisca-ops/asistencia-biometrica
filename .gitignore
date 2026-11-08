@@ -19,3 +19,6 @@ apps/kiosk/ios/App/Pods/
 apps/kiosk/android/app/src/main/assets/public/
 apps/kiosk/android/app/src/main/assets/capacitor.config.json
 apps/kiosk/android/app/src/main/assets/capacitor.plugins.json
+apps/kiosk/public/models/
+apps/kiosk/public/vendor/
+apps/kiosk/dist-biotest/

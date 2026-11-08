@@ -12,7 +12,7 @@ Verificado directamente en código, base de datos y pruebas (no en el resumen).
 | Offline: SQLCipher, cola, reloj monotónico, sincronización idempotente | ✅ Funciona | `apps/kiosk/src/domain`; 13 pruebas + E2E con corte de red |
 | Registros firmados, inmutables, correcciones auditadas | ✅ Funciona | triggers append-only; pruebas SQL |
 | Panel: reportes por jornada, incidencias, exportación CSV, auditoría, MFA | ✅ Funciona | `apps/admin`; desplegado en Vercel |
-| **Reconocimiento facial** | ❌ No existe | Motor `SIMULADO@0` con selección manual (solo pruebas) |
+| **Reconocimiento facial** | 🧪 Experimental funcionando (Etapa 1) | MediaPipe + SFace en la app, sin red; identificación 1:N automática; pruebas en docs/PRUEBAS_RECONOCIMIENTO.md. Pendiente: medición en teléfono real y calibración con voluntarios |
 | **Prueba de vida** | ❌ No existe | — |
 | **Enrolamiento facial central** | ⚠️ Solo backend | `enroll_biometric` (sede central, consentimiento, PAD, 3–10 muestras); sin captura |
 | Protecciones de la app (sin quiosco bloqueado, por decisión) | ⚠️ Parcial | FLAG_SECURE, sin backup en la nube; faltan PIN de encargado, root/integridad, alertas |
@@ -23,4 +23,4 @@ Verificado directamente en código, base de datos y pruebas (no en el resumen).
 
 **Pruebas automáticas:** 151 (42 core + 13 kiosk + 86 SQL + 9 integración + 1 E2E), todas en verde; CI en GitHub Actions compila el APK.
 
-**Clasificación honesta del sistema hoy:** *prototipo funcional de la infraestructura de asistencia*, **sin biometría**. No es piloto ni producción.
+**Clasificación honesta del sistema hoy:** *prototipo funcional* con reconocimiento facial **experimental** y **sin prueba de vida**. No es piloto ni producción.

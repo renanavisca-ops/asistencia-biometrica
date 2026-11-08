@@ -27,3 +27,6 @@ Estados: **Prototipo funcional → Piloto controlado → Validado para producci�
 - **Enrolamiento desde la app en modo enrolamiento** (teléfono de la sede central, administrador con credenciales + MFA).
 - **Sin modo quiosco bloqueado**: el teléfono de la tienda se usa también para otras cosas; la app debe poder abrirse y cerrarse.
 - **Voluntarios disponibles**, con la condición de que **todos sus datos se borren al final de las pruebas** y la operación real empiece en limpio. Implementación: todas las pruebas en una organización marcada `is_test`; función de borrado total (empleados, documentos, plantillas, eventos, dispositivos) solo para superadministrador y solo sobre organizaciones de prueba; verificación posterior de que no quedan registros. Los datos de prueba actuales («TU AMIGO GUA») también se pueden borrar antes de arrancar.
+
+## Avance
+- **Etapa 1 (2026-11-08): completada como prototipo.** Motor en la app (WebAssembly; mismo código servirá para iOS), interfaces intercambiables (`apps/kiosk/src/infra/biometric/`), adaptadores comerciales vacíos, identificación automática, diagnóstico del motor para el encargado, modelos con SHA-256 fijo, APK 0.2.0 (66 MB). Mientras nadie de una tienda tenga plantilla del motor real, la app ofrece el modo prueba transitorio (selección manual etiquetada).

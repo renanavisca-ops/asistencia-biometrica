@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Asistencia Tienda</string>
+    <string name="title_activity_main">Asistencia Tienda</string>
+    <string name="package_name">com.asistencia.kiosk</string>
+    <string name="custom_url_scheme">com.asistencia.kiosk</string>
+</resources>

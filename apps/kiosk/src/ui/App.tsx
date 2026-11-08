@@ -1,0 +1,190 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { App as CapApp } from '@capacitor/app';
+import type { RosterEntry } from '@asistencia/core';
+import { KioskService, nextBackoffMs, type PunchResult } from '../domain/kiosk.ts';
+import type { DeviceState, LocalEventStatus } from '../domain/store.ts';
+import { simulatedEngine, simulatedIdentification } from '../infra/biometric/engine.ts';
+import { Camera } from './Camera.tsx';
+
+type View =
+  | { name: 'loading' } | { name: 'setup' } | { name: 'home' } | { name: 'capture' }
+  | { name: 'result'; result: PunchResult } | { name: 'blocked' };
+
+const fmtTime = (ms: number, tz: string) => new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: tz }).format(new Date(ms));
+const REFUSED: Record<string, string> = {
+  not_activated: 'Teléfono no activado.', blocked: 'Teléfono bloqueado por administración.',
+  unknown_employee: 'Persona no autorizada en esta tienda.', lease_expired: 'Autorización caducada: el teléfono necesita sincronizar con internet.',
+  offline_too_long: 'Demasiado tiempo sin conexión: conecte el teléfono a internet para seguir marcando.', storage_error: 'Error al guardar. Intente de nuevo; si persiste, avise al encargado.',
+};
+
+export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: boolean }) {
+  const [view, setView] = useState<View>({ name: 'loading' });
+  const [st, setSt] = useState<DeviceState | null>(null);
+  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [counts, setCounts] = useState<Record<LocalEventStatus, number> | null>(null);
+  const [syncInfo, setSyncInfo] = useState<string>('');
+  const [admin, setAdmin] = useState(false);
+  const attempt = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refresh = useCallback(async () => {
+    const s = await svc.status();
+    setSt(s.state); setCounts(s.counts);
+    setRoster(s.state ? await svc.store.getRoster() : []);
+    return s.state;
+  }, [svc]);
+
+  const runSync = useCallback(async () => {
+    if (timer.current) clearTimeout(timer.current);
+    const r = await svc.sync();
+    const state = await refresh();
+    if (r.ok) { attempt.current = 0; setSyncInfo(`OK · ${r.pushed} enviados · ${r.rosterSize} autorizados`); }
+    else { setSyncInfo(`Sin sincronizar (${r.error})`); }
+    if (state?.status && state.status !== 'active') { setView({ name: 'blocked' }); return; }
+    const delay = r.ok ? 5 * 60_000 : r.retryable ? nextBackoffMs(attempt.current++) : 30 * 60_000;
+    timer.current = setTimeout(runSync, delay);
+  }, [svc, refresh]);
+
+  useEffect(() => {
+    (async () => {
+      const s = await refresh();
+      if (!s) return setView({ name: 'setup' });
+      setView(s.status === 'active' ? { name: 'home' } : { name: 'blocked' });
+      runSync();
+    })();
+    const onOnline = () => runSync();
+    window.addEventListener('online', onOnline);
+    const sub = CapApp.addListener('appStateChange', ({ isActive }) => { if (isActive) runSync(); });
+    return () => { window.removeEventListener('online', onOnline); sub.then((h) => h.remove()); if (timer.current) clearTimeout(timer.current); };
+  }, [refresh, runSync]);
+
+  // Tras la confirmación vuelve solo a la pantalla inicial limpia (la cámara se apaga al desmontarse).
+  useEffect(() => {
+    if (view.name !== 'result') return;
+    const t = setTimeout(() => setView({ name: 'home' }), (st?.policy.confirmationSec ?? 4) * 1000);
+    return () => clearTimeout(t);
+  }, [view, st]);
+  useEffect(() => {
+    if (view.name !== 'capture') return;
+    const t = setTimeout(() => setView({ name: 'home' }), 45_000); // inactividad
+    return () => clearTimeout(t);
+  }, [view]);
+
+  const punch = async (employeeId: string) => {
+    const result = await svc.punch(simulatedIdentification(employeeId));
+    setView({ name: 'result', result });
+    refresh();
+    if (result.kind === 'recorded') runSync();
+  };
+
+  const footer = st && (
+    <div className="footer" onContextMenu={(e) => e.preventDefault()}
+      onPointerDown={(e) => { const t = setTimeout(() => setAdmin(true), 3000); const up = () => { clearTimeout(t); e.currentTarget?.removeEventListener('pointerup', up); }; e.currentTarget.addEventListener('pointerup', up); }}>
+      <span>{st.storeName}</span>
+      <span>{counts?.pending ? `${counts.pending} pendientes` : 'al día'} · v{st.policy.version}</span>
+    </div>
+  );
+
+  return (
+    <>
+      {simulatedEngine.kind === 'simulated' && view.name !== 'loading' && (
+        <div className="banner-test">MODO PRUEBA — SIN BIOMETRÍA · no apto para uso real</div>
+      )}
+      {!persistent && view.name !== 'loading' && <div className="banner-test" style={{ top: 32, background: '#e5484d', color: '#fff' }}>NAVEGADOR: datos no persistentes</div>}
+      {view.name === 'loading' && <div className="screen muted">Cargando…</div>}
+      {view.name === 'setup' && <Setup svc={svc} onDone={async () => { await refresh(); setView({ name: 'home' }); runSync(); }} />}
+      {view.name === 'blocked' && (
+        <div className="screen"><div className="big">Teléfono bloqueado</div><p className="muted">Este teléfono fue bloqueado o retirado por administración. Los datos de empleados se eliminaron del equipo.</p></div>
+      )}
+      {view.name === 'home' && (
+        <button className="screen full" style={{ background: 'none', border: 0, color: 'inherit', font: 'inherit' }} onClick={() => setView({ name: 'capture' })} aria-label="Tocar para marcar asistencia">
+          <h1>Marcar asistencia</h1>
+          <div className="big">Toque la pantalla</div>
+          <p className="muted">Mire a la cámara cuando se abra. No necesita escribir nada.</p>
+        </button>
+      )}
+      {view.name === 'capture' && (
+        <div className="screen" style={{ paddingTop: 84, justifyContent: 'flex-start' }}>
+          <Camera />
+          <p aria-live="polite">Centre su rostro en el óvalo, con buena luz.</p>
+          {simulatedEngine.requiresManualSelection && (
+            <>
+              <p className="muted" style={{ fontSize: 14 }}>Modo prueba: seleccione la persona (en producción se identifica sola).</p>
+              <div className="picker">
+                {roster.length === 0 && <p className="muted">Sin personas autorizadas. ¿El teléfono ya sincronizó?</p>}
+                {roster.map((r) => <button key={r.employeeId} className="btn" onClick={() => punch(r.employeeId)}>{r.displayName}</button>)}
+              </div>
+            </>
+          )}
+          <button className="btn small" onClick={() => setView({ name: 'home' })}>Cancelar</button>
+        </div>
+      )}
+      {view.name === 'result' && <Result r={view.result} tz={st?.timezone ?? 'UTC'} />}
+      {footer}
+      {admin && st && (
+        <div className="overlay" role="dialog" aria-label="Estado del dispositivo">
+          <h1>Estado del teléfono</h1>
+          <table><tbody>
+            <tr><td>Sede</td><td>{st.storeName}</td></tr>
+            <tr><td>Última sincronización</td><td>{st.lastSyncAt ? new Date(st.lastSyncAt).toLocaleString('es', { timeZone: st.timezone }) : 'nunca'}</td></tr>
+            <tr><td>Resultado</td><td>{syncInfo || '—'}</td></tr>
+            <tr><td>Pendientes de subir</td><td>{counts?.pending ?? 0}</td></tr>
+            <tr><td>Aceptados / revisión / rechazados</td><td>{counts?.accepted ?? 0} / {counts?.needs_review ?? 0} / {counts?.rejected ?? 0}</td></tr>
+            <tr><td>Personas autorizadas</td><td>{roster.length}</td></tr>
+            <tr><td>Política</td><td>v{st.policy.version}</td></tr>
+            <tr><td>Motor biométrico</td><td>{simulatedEngine.label} (NO IMPLEMENTADO)</td></tr>
+            <tr><td>Dispositivo</td><td style={{ fontFamily: 'monospace', fontSize: 12 }}>{st.deviceId}</td></tr>
+          </tbody></table>
+          <button className="btn primary" onClick={runSync}>Sincronizar ahora</button>
+          <button className="btn small" onClick={() => setAdmin(false)}>Cerrar</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const MSG: Record<string, string> = { invalid_code: 'Código inválido, usado o caducado.', network_error: 'Sin conexión. La activación requiere internet.', device_blocked: 'Dispositivo bloqueado.', throttled: 'Demasiados intentos. Espere unos minutos.' };
+  return (
+    <form className="screen" onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(null); const r = await svc.activate(code); setBusy(false); r.ok ? onDone() : setErr(MSG[r.error] ?? r.error); }}>
+      <h1>Activar teléfono de tienda</h1>
+      <p className="muted">Introduzca el código emitido en el panel central (Dispositivos → Emitir código).</p>
+      <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" required minLength={12} />
+      {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
+      <button className="btn primary" disabled={busy}>{busy ? 'Activando…' : 'Activar'}</button>
+    </form>
+  );
+}
+
+function Result({ r, tz }: { r: PunchResult; tz: string }) {
+  if (r.kind === 'recorded') {
+    return (
+      <div className={`screen full ${r.eventType === 'IN' ? 'ok-in' : 'ok-out'}`} role="status" aria-live="assertive">
+        <div className="big">{r.eventType === 'IN' ? 'ENTRADA REGISTRADA' : 'SALIDA REGISTRADA'}</div>
+        <div style={{ fontSize: 32 }}>{r.displayName}</div>
+        <div style={{ fontSize: 40, fontWeight: 700 }}>{fmtTime(r.at, tz)}</div>
+        <p>Guardado en el teléfono. Se enviará al servidor automáticamente.</p>
+        {r.flags.length > 0 && <p style={{ fontSize: 14 }}>Hora en revisión ({r.flags.join(', ')})</p>}
+      </div>
+    );
+  }
+  if (r.kind === 'duplicate') {
+    return (
+      <div className="screen full warn" role="status" aria-live="assertive">
+        <div className="big">Ya registrado</div>
+        <div style={{ fontSize: 28 }}>{r.displayName}</div>
+        <p>Su {r.eventType === 'IN' ? 'ENTRADA' : 'SALIDA'} se registró hace {r.secondsSince} s. No se registró nada nuevo.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="screen full bad" role="alert">
+      <div className="big">No se registró</div>
+      <p style={{ fontSize: 22 }}>{REFUSED[r.reason] ?? r.reason}</p>
+      <p>Si no puede marcar, avise al encargado para el procedimiento supervisado.</p>
+    </div>
+  );
+}

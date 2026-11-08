@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "allowImportingTsExtensions": true, "jsx": "react-jsx", "types": ["vite/client"] },
+  "include": ["src", "test"],
+  "exclude": ["test/kiosk.e2e.test.ts"]
+}

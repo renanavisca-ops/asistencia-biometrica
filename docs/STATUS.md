@@ -8,7 +8,7 @@
 | Panel administrativo Next.js | ✅ Desplegado en https://asistencia-biometrica.vercel.app | Proyecto Vercel creado por el propietario (plan Hobby). Superadministrador creado; login + MFA TOTP verificados por el propietario |
 | Invitación de administradores por correo | ⬜ No iniciado | Hoy el alta es por SQL o registro inicial (docs/DEPLOYMENT.md) |
 | Procedimiento supervisado para no reconocidos / sin biometría | ⬜ No iniciado | El esquema lo admite (`supervised_exception`) |
-| Fase 3 — app móvil Capacitor (offline, SQLite cifrado, Keystore/Keychain) | ⬜ No iniciado | — |
+| Fase 3 — app de tienda Android (Capacitor) | 🟡 En curso | Dominio offline + sincronización probados (9 unitarias + E2E app↔Edge Function↔Postgres); flujo de pantallas verificado con Playwright contra backend local; APK debug compilando. Pendiente: pruebas en teléfono real. Ver docs/MOBILE.md |
 | Fase 4 — reconocimiento facial 1:N | ❌ **NO IMPLEMENTADO** | Solo comparador de vectores |
 | Fase 4 — prueba de vida / PAD | ❌ **NO IMPLEMENTADO** | Sin modelo evaluado. **El sistema NO es apto para producción** |
 | Revisión legal por país (Centroamérica) | ⬜ Pendiente del propietario | docs/SECURITY_PRIVACY.md |

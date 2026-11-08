@@ -12,7 +12,10 @@
 | Panel: compilación y tipos | `next build`, `tsc` | local | ✅ |
 | Panel: redirección sin sesión, cabeceras, login contra Auth real | curl + Playwright | local contra Supabase | ✅ |
 | Panel: flujo completo con MFA y datos reales | Manual tras el arranque del superadmin | Vercel | ⏳ pendiente |
-| App móvil, offline real, cierre forzado, reinicio | Dispositivos Android/iPhone | Fase 3 | ⏳ |
+| App de tienda: dominio offline (duplicados, reloj manipulado, fallo de escritura, lease, offline máximo, cola) | 9 pruebas unitarias | `pnpm --filter @asistencia/kiosk test` | ✅ 9/9 |
+| App ↔ Edge Function ↔ Postgres (activación, offline, corte de red en push, 2.º teléfono, traslado, bloqueo) | 1 escenario E2E | `bash scripts/test-kiosk-e2e.sh` | ✅ |
+| Flujo de pantallas (activar, marcar, duplicado, estado) | Playwright + cámara simulada contra backend local | manual | ✅ |
+| App en teléfono real: cierre forzado, reinicio, SQLCipher, cámara | Dispositivo Android | Fase 3 | ⏳ |
 | Exactitud biométrica (FPIR/FNIR con IC 95 %) y PAD (APCER/BPCER) | Ver docs/BIOMETRICS.md | Fase 4 | ⏳ **NO IMPLEMENTADO** |
 | Rendimiento por modelo de teléfono | Latencia, batería, temperatura | Fase 4 | ⏳ |
 | Exportaciones coinciden con eventos auditados | Comparar CSV con `attendance_events` | Fase 5 | ⏳ |

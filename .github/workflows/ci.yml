@@ -30,3 +30,34 @@ jobs:
         with: { deno-version: v2.5.6 }
       - name: Prueba de integración device-api contra Postgres local
         run: PGBIN=/usr/lib/postgresql/16/bin bash scripts/test-edge.sh
+  kiosk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @asistencia/kiosk typecheck
+      - run: pnpm --filter @asistencia/kiosk test
+      - name: E2E app ↔ device-api ↔ Postgres
+        run: PGBIN=/usr/lib/postgresql/16/bin bash scripts/test-kiosk-e2e.sh
+  android-apk:
+    runs-on: ubuntu-24.04
+    needs: kiosk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: pnpm install --frozen-lockfile
+      - name: APK de prueba (debug, MODO PRUEBA sin biometría)
+        working-directory: apps/kiosk
+        run: pnpm exec vite build && pnpm exec cap sync android && cd android && ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asistencia-tienda-debug-apk
+          path: apps/kiosk/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14

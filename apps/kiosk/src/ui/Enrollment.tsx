@@ -152,6 +152,19 @@ function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient
   );
 }
 
+const dot = (a: Float32Array, b: Float32Array) => { let t = 0; for (let i = 0; i < a.length; i++) t += a[i]! * b[i]!; return t; };
+const MAX_CANDIDATES = 10;   // fotogramas válidos que se intentan como máximo
+const MIN_CONSISTENCY = 0.5; // similitud mínima de cada muestra con el promedio (provisional, Etapa 4)
+
+/** Elige las `k` muestras más coherentes entre sí (descarta fotogramas atípicos: movimiento, parpadeo, mala alineación). */
+function mostConsistent(c: { emb: Float32Array; pad: number; q: unknown }[], k: number) {
+  const score = c.map((x, i) => c.reduce((acc, y, j) => (i === j ? acc : acc + dot(x.emb, y.emb)), 0));
+  const picked = c.map((x, i) => ({ x, s: score[i]! })).sort((a, b) => b.s - a.s).slice(0, k).map((p) => p.x);
+  const mean = FreeFaceRecognitionAdapter.average(picked.map((p) => p.emb));
+  const sims = picked.map((p) => dot(p.emb, mean));
+  return { picked, mean, sims, minSim: Math.min(...sims) };
+}
+
 function Capture({ sb, org, emp, consentId, identity, setErr, onDone, onBack }: {
   sb: SupabaseClient; org: string; emp: Emp; consentId: string; identity: string; setErr: (e: string | null) => void; onDone: (m: string) => void; onBack: () => void;
 }) {
@@ -159,65 +172,79 @@ function Capture({ sb, org, emp, consentId, identity, setErr, onDone, onBack }: 
   const [hint, setHint] = useState('Preparando cámara…');
   const [count, setCount] = useState(0);
   const [challenge, setChallenge] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let stop = false;
+    setFailed(null); setCount(0); setErr(null);
+    const fail = (m: string) => { if (!stop) { setFailed(m); setHint('Captura no completada'); setChallenge(null); } };
     (async () => {
+      setHint('Cargando motor…');
       const eng = await getEngine();
-      const samples: Float32Array[] = []; const pads: number[] = []; const quality: unknown[] = [];
-      // Prueba de vida activa antes de capturar.
+      // 1) Prueba de vida activa antes de capturar.
       const ch = new ActiveChallenge(randomChallenge());
-      setChallenge(CHALLENGE_TEXT[ch.kind]);
+      setHint('Prueba de vida'); setChallenge(CHALLENGE_TEXT[ch.kind]);
       const t0 = performance.now(); let ok = false;
       while (!stop && performance.now() - t0 < 15000) {
         const v = video.current; if (!v || v.readyState < 2) { await sleep(100); continue; }
         const f = await eng.detector.detect(v, performance.now());
         if (f.length === 1 && ch.update(f[0]!)) { ok = true; break; }
+        await sleep(30);
       }
       setChallenge(null);
       if (stop) return;
-      if (!ok) { setErr('No se completó la prueba de vida. Intente de nuevo.'); return onBack(); }
-      while (!stop && samples.length < SAMPLES) {
-        const v = video.current; if (!v) { await sleep(100); continue; }
+      if (!ok) return fail('No se completó la prueba de vida en 15 s. Siga la instrucción en pantalla (parpadear o girar la cabeza).');
+      // 2) Pausa: que la persona vuelva a mirar de frente antes de tomar muestras.
+      setHint('✅ Bien. Ahora mire de frente y quédese quieto');
+      await sleep(1800);
+      // 3) Muestras espaciadas; se guardan hasta MAX_CANDIDATES y se eligen las más coherentes.
+      const cand: { emb: Float32Array; pad: number; q: unknown }[] = [];
+      const tStart = performance.now();
+      while (!stop && cand.length < MAX_CANDIDATES && performance.now() - tStart < 30000) {
+        const v = video.current; if (!v || v.readyState < 2) { await sleep(100); continue; }
         const a = await eng.analyze(v, performance.now());
-        if (!a.quality.ok || !a.aligned) { setHint(QUALITY_MESSAGE[a.quality.issues[0]!]); await sleep(80); continue; }
+        if (!a.quality.ok || !a.aligned) { setHint(QUALITY_MESSAGE[a.quality.issues[0]!]); await sleep(120); continue; }
         const emb = await eng.embed(a.aligned);
-        // Evita muestras casi idénticas consecutivas: se pide una ligera variación.
-        if (samples.length && Math.max(...samples.map((s) => s.reduce((acc, x, i) => acc + x * emb[i]!, 0))) > 0.995) { setHint('Mueva levemente la cabeza'); await sleep(150); continue; }
-        samples.push(emb); pads.push(await eng.liveness.score(v, a.faces[0]!)); quality.push(a.quality.metrics);
-        setCount(samples.length); setHint('Muestra guardada');
-        await sleep(400);
+        const pad = await eng.liveness.score(v, a.faces[0]!);
+        cand.push({ emb, pad, q: a.quality.metrics });
+        if (cand.length >= SAMPLES && mostConsistent(cand, SAMPLES).minSim >= MIN_CONSISTENCY) break;
+        setCount(Math.min(cand.length, SAMPLES)); setHint(cand.length < SAMPLES ? 'Muestra guardada, siga mirando de frente' : 'Tomando una muestra más…');
+        await sleep(600);
       }
       if (stop) return;
-      const pad = pads.reduce((x, y) => x + y, 0) / pads.length;
-      if (pad < PAD_ENROLL_MIN) { setErr(`Prueba de vida pasiva insuficiente (${pad.toFixed(2)}). Mejore la luz e intente de nuevo.`); return onBack(); }
-      // Consistencia: todas las muestras deben ser de la misma persona.
-      const mean = FreeFaceRecognitionAdapter.average(samples);
-      const minSim = Math.min(...samples.map((s) => s.reduce((acc, x, i) => acc + x * mean[i]!, 0)));
-      if (minSim < 0.6) { setErr('Las muestras no son consistentes. Repita la captura.'); return onBack(); }
+      if (cand.length < SAMPLES) return fail(`Solo se lograron ${cand.length} de ${SAMPLES} muestras en 30 s. Mejore la luz, acérquese y mire de frente.`);
+      const { picked, sims, minSim } = mostConsistent(cand, SAMPLES);
+      setCount(SAMPLES);
+      if (minSim < MIN_CONSISTENCY) {
+        return fail(`Las muestras no son consistentes (mínima ${minSim.toFixed(2)}, se requiere ${MIN_CONSISTENCY}; valores: ${sims.map((x) => x.toFixed(2)).join(', ')}; fotogramas probados: ${cand.length}). Evite moverse y mejore la luz.`);
+      }
+      const pad = picked.reduce((x, y) => x + y.pad, 0) / picked.length;
+      if (pad < PAD_ENROLL_MIN) return fail(`Prueba de vida pasiva insuficiente (${pad.toFixed(2)}, se requiere ${PAD_ENROLL_MIN}). Mejore la luz (de frente, sin contraluz) e intente de nuevo.`);
       setHint('Comprobando duplicados…');
       const { data: model } = await sb.from('model_versions').select('id').eq('name', 'sface').eq('version', '2021dec').single();
-      const enc = samples.map(b64);
+      const enc = picked.map((p) => b64(p.emb));
+      const quality = picked.map((p) => p.q);
       const { data: dups, error: dErr } = await sb.rpc('check_biometric_duplicate', { p_employee_id: emp.id, p_samples: enc, p_recognition_model_id: model!.id, p_threshold: DUP_THRESHOLD });
-      if (dErr) { setErr('Error al comprobar duplicados: ' + dErr.message); return onBack(); }
+      if (dErr) return fail('Error al comprobar duplicados: ' + dErr.message);
       if ((dups as unknown[]).length) {
         const d = (dups as { employee_code: string; employee_name: string; score: number }[])[0]!;
-        setErr(`Este rostro ya está enrolado como ${d.employee_name} (#${d.employee_code}, similitud ${d.score.toFixed(2)}). Enrolamiento bloqueado; revise con administración.`);
-        return onBack();
+        return fail(`Este rostro ya está enrolado como ${d.employee_name} (#${d.employee_code}, similitud ${d.score.toFixed(2)}). Enrolamiento bloqueado; revise con administración.`);
       }
       const { data: central } = await sb.rpc('central_store_for', { p_org: org });
-      if (!central) { setErr('La organización no tiene una sede central activa. Márquela en el panel (Sedes y tiendas).'); return onBack(); }
+      if (!central) return fail('La organización no tiene una sede central activa. Márquela en el panel (Sedes y tiendas).');
       const { data: padModel } = await sb.from('model_versions').select('id').eq('kind', 'pad').eq('name', 'minifasnet-v2+v1se').maybeSingle();
+      setHint('Guardando…');
       const { error } = await sb.rpc('enroll_biometric', {
         p_employee_id: emp.id, p_consent_id: consentId, p_store_id: central, p_identity_method: identity, p_samples: enc,
-        p_quality: { samples: quality, minConsistency: +minSim.toFixed(3), engine: eng.label, challenge: ch.kind }, p_pad_passed: true, p_pad_score: pad,
+        p_quality: { samples: quality, minConsistency: +minSim.toFixed(3), candidates: cand.length, engine: eng.label, challenge: ch.kind }, p_pad_passed: true, p_pad_score: pad,
         p_recognition_model_id: model!.id, p_pad_model_id: padModel?.id ?? null,
       });
-      if (error) { setErr('No se pudo guardar: ' + error.message); return onBack(); }
-      onDone(`✅ ${emp.first_name} ${emp.last_name} enrolado (${SAMPLES} muestras, prueba de vida ${pad.toFixed(2)}). Los teléfonos de su tienda lo recibirán en la próxima sincronización.`);
-    })();
+      if (error) return fail('No se pudo guardar: ' + error.message);
+      onDone(`✅ ${emp.first_name} ${emp.last_name} enrolado (${SAMPLES} muestras, consistencia ${minSim.toFixed(2)}, prueba de vida ${pad.toFixed(2)}). Los teléfonos de su tienda lo recibirán en la próxima sincronización.`);
+    })().catch((e) => fail('Error del motor: ' + (e instanceof Error ? e.message : String(e))));
     return () => { stop = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
   return (
     <>
       <p style={{ fontSize: 20, margin: 0 }}>{emp.first_name} {emp.last_name}</p>
@@ -225,7 +252,9 @@ function Capture({ sb, org, emp, consentId, identity, setErr, onDone, onBack }: 
       {challenge && <p style={{ fontSize: 28, fontWeight: 800, color: 'var(--warn)', margin: 0 }}>{challenge}</p>}
       <p style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{hint}</p>
       <p>Muestras: {count} / {SAMPLES}</p>
-      <button className="btn small" onClick={onBack}>Cancelar</button>
+      {failed && <p style={{ color: 'var(--err)', fontSize: 16 }}>{failed}</p>}
+      {failed && <button className="btn" onClick={() => setAttempt((n) => n + 1)}>Reintentar captura</button>}
+      <button className="btn small" onClick={onBack}>{failed ? 'Volver' : 'Cancelar'}</button>
     </>
   );
 }

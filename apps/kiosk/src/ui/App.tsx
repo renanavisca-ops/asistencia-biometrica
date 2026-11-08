@@ -143,18 +143,39 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   );
 }
 
+// Alfabeto de los códigos de activación (sin O, 0, I, 1, L para evitar confusiones).
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export function normalizeCode(raw: string) {
+  return raw.toUpperCase().split('').filter((c) => CODE_ALPHABET.includes(c)).join('').slice(0, 12);
+}
+export const formatCode = (n: string) => n.replace(/(.{4})(?=.)/g, '$1-');
+
 function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const MSG: Record<string, string> = { invalid_code: 'Código inválido, usado o caducado.', network_error: 'Sin conexión. La activación requiere internet.', device_blocked: 'Dispositivo bloqueado.', throttled: 'Demasiados intentos. Espere unos minutos.' };
+  const [warn, setWarn] = useState<string | null>(null);
+  const MSG: Record<string, string> = {
+    invalid_code: 'Código no válido, ya usado o caducado. Revise los 12 caracteres o emita uno nuevo en el panel.',
+    network_error: 'Sin conexión. La activación requiere internet.', device_blocked: 'Dispositivo bloqueado.',
+    throttled: 'Demasiados intentos. Espere unos minutos.', invalid_proof: 'Error de seguridad del teléfono. Reinstale la app.',
+  };
+  const onChange = (raw: string) => {
+    const typed = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const n = normalizeCode(raw);
+    setWarn(typed.length > n.length && /[O0I1L]/.test(typed) ? 'Los códigos no usan las letras O, I, L ni los números 0 y 1.' : null);
+    setCode(n); setErr(null);
+  };
   return (
-    <form className="screen" onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(null); const r = await svc.activate(code); setBusy(false); r.ok ? onDone() : setErr(MSG[r.error] ?? r.error); }}>
+    <form className="screen" onSubmit={async (e) => { e.preventDefault(); if (code.length !== 12) return; setBusy(true); setErr(null); const r = await svc.activate(code); setBusy(false); r.ok ? onDone() : setErr(MSG[r.error] ?? r.error); }}>
       <h1>Activar teléfono de tienda</h1>
       <p className="muted">Introduzca el código emitido en el panel central (Dispositivos → Emitir código).</p>
-      <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" autoCapitalize="characters" autoComplete="off" required minLength={12} />
+      <input value={formatCode(code)} onChange={(e) => onChange(e.target.value)} placeholder="XXXX-XXXX-XXXX" inputMode="text"
+        autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false} aria-describedby="code-count" />
+      <p id="code-count" className="muted" style={{ fontSize: 15, margin: 0 }}>{code.length} de 12 caracteres</p>
+      {warn && <p style={{ color: 'var(--warn)', margin: 0 }}>{warn}</p>}
       {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
-      <button className="btn primary" disabled={busy}>{busy ? 'Activando…' : 'Activar'}</button>
+      <button className="btn primary" disabled={busy || code.length !== 12}>{busy ? 'Activando…' : 'Activar'}</button>
     </form>
   );
 }

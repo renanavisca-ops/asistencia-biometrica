@@ -2,7 +2,9 @@ import { notFound } from 'next/navigation';
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
 import { fmtDateTime, fmtDuration, STATE_LABEL } from '@/lib/format';
-import { recordConsent, revokeAssignment, setStatus, transfer, updateEmployee } from '../actions';
+import { recordConsent, revokeAssignment, setDocument, setStatus, transfer, updateEmployee } from '../actions';
+import { COUNTRIES, DOC_TYPES } from '@/lib/documents';
+import { RevealDocument } from './RevealDocument';
 
 export default async function Employee({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SP }) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
@@ -29,10 +31,10 @@ export default async function Employee({ params, searchParams }: { params: Promi
           {manage ? (
             <form action={updateEmployee} style={{ display: 'grid', gap: 8 }}>
               <OrgField org={org.id} /><input type="hidden" name="id" value={e.id} />
-              <label>Código<input name="employee_code" defaultValue={e.employee_code} required /></label>
+              <label>Código (automático, no editable)<input value={e.employee_code} disabled /></label>
               <label>Nombre(s)<input name="first_name" defaultValue={e.first_name} required /></label>
               <label>Apellido(s)<input name="last_name" defaultValue={e.last_name} required /></label>
-              <label>Últimos 4 del documento<input name="document_last4" defaultValue={e.document_last4 ?? ''} maxLength={4} /></label>
+              <label>Fecha de ingreso<input type="date" name="hired_on" defaultValue={e.hired_on ?? ''} /></label>
               <button>Guardar</button>
             </form>
           ) : <p>{e.first_name} {e.last_name}</p>}
@@ -50,6 +52,25 @@ export default async function Employee({ params, searchParams }: { params: Promi
           )}
           <ul className="muted">{(hist ?? []).map((h) => <li key={h.id}>{fmtDateTime(h.changed_at)}: {h.from_status ?? '—'} → {h.to_status} {h.reason ? `(${h.reason})` : ''}</li>)}</ul>
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Documento de identidad</h3>
+        <p>{e.document_type ? <><b>{e.document_type}</b> ({e.document_country}) <span className="mono">••••••••{e.document_last4}</span></> : <span className="muted">Sin documento registrado.</span>}</p>
+        <p className="muted">Se guarda cifrado. Ver el número completo requiere un motivo y queda registrado en la auditoría.</p>
+        {manage && e.document_type && <RevealDocument employeeId={e.id} />}
+        {manage && (
+          <details style={{ marginTop: 10 }}><summary>{e.document_type ? 'Corregir documento' : 'Registrar documento'}</summary>
+            <form action={setDocument} className="inline" style={{ marginTop: 8 }}>
+              <OrgField org={org.id} /><input type="hidden" name="id" value={e.id} />
+              <label>Tipo<select name="document_type" defaultValue={e.document_type ?? 'DPI'}>{DOC_TYPES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+              <label>País<select name="document_country" defaultValue={e.document_country ?? 'GT'}>{COUNTRIES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+              <label>Número<input name="document_number" required autoComplete="off" /></label>
+              <label>Motivo<input name="reason" required minLength={5} /></label>
+              <button className="secondary">Guardar</button>
+            </form>
+          </details>
+        )}
       </div>
 
       <div className="card">

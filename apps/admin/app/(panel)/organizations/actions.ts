@@ -4,7 +4,7 @@ import { back, s } from '@/lib/actions';
 
 export async function createOrganization(fd: FormData) {
   const sb = await supabaseServer();
-  const { data, error } = await sb.from('organizations').insert({ name: s(fd, 'name') }).select('id').single();
+  const { data, error } = await sb.from('organizations').insert({ name: s(fd, 'name'), employee_code_prefix: (s(fd, 'prefix') ?? 'EMP').toUpperCase() }).select('id').single();
   if (!error && data) fd.set('org', data.id);
   back('/organizations', fd, error, 'Organización creada');
 }
@@ -31,4 +31,10 @@ export async function setStoreStatus(fd: FormData) {
   const sb = await supabaseServer();
   const { error } = await sb.from('stores').update({ status: s(fd, 'status') }).eq('id', s(fd, 'id') ?? '');
   back('/organizations', fd, error, 'Estado de la sede actualizado');
+}
+
+export async function setPrefix(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.from('organizations').update({ employee_code_prefix: (s(fd, 'prefix') ?? '').toUpperCase() }).eq('id', s(fd, 'org') ?? '');
+  back('/organizations', fd, error, 'Prefijo actualizado (aplica a los próximos empleados)');
 }

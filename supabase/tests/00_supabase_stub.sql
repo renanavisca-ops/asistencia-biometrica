@@ -18,3 +18,4 @@ create schema vault;
 create table vault.secrets (name text primary key, secret text not null);
 create view vault.decrypted_secrets as select name, secret as decrypted_secret from vault.secrets;
 insert into vault.secrets values ('template_enc_key', encode(extensions.gen_random_bytes(32), 'base64'));
+insert into vault.secrets values ('pii_enc_key', encode(extensions.gen_random_bytes(32), 'base64'));

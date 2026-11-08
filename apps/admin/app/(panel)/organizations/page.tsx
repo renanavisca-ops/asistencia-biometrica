@@ -1,6 +1,6 @@
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
-import { createOrganization, createRegion, createStore, setStoreStatus } from './actions';
+import { createOrganization, createRegion, createStore, setPrefix, setStoreStatus } from './actions';
 
 // Zonas horarias de Centroamérica (IANA). Se pueden escribir otras manualmente.
 const TZ = ['America/Guatemala', 'America/El_Salvador', 'America/Tegucigalpa', 'America/Managua', 'America/Costa_Rica', 'America/Panama', 'America/Belize'];
@@ -8,6 +8,9 @@ const TZ = ['America/Guatemala', 'America/El_Salvador', 'America/Tegucigalpa', '
 export default async function Organizations({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const { supabase, org, isSuper, orgWide } = await getContext(sp.org);
+  const { data: orgRow } = org
+    ? await supabase.from('organizations').select('employee_code_prefix, next_employee_number').eq('id', org.id).maybeSingle()
+    : { data: null };
   const [{ data: regions }, { data: stores }] = org
     ? await Promise.all([
         supabase.from('regions').select('*').eq('organization_id', org.id).order('country_code'),
@@ -25,12 +28,25 @@ export default async function Organizations({ searchParams }: { searchParams: SP
           <h3>Nueva organización</h3>
           <form action={createOrganization} className="inline">
             <label>Nombre<input name="name" required minLength={2} /></label>
+            <label>Prefijo de códigos de empleado<input name="prefix" required pattern="[A-Za-z0-9]{2,6}" maxLength={6} placeholder="TAG" style={{ minWidth: 90 }} /></label>
             <button>Crear</button>
           </form>
         </div>
       )}
       {org && (
         <>
+          <div className="card">
+            <h3>Códigos de empleado de {org.name}</h3>
+            <p>Formato: <span className="mono">{orgRow?.employee_code_prefix}-000001</span> · próximo número: <b>{orgRow?.next_employee_number}</b></p>
+            {isSuper && (
+              <form action={setPrefix} className="inline">
+                <OrgField org={org.id} />
+                <label>Prefijo (2–6 letras/números)<input name="prefix" defaultValue={orgRow?.employee_code_prefix} required pattern="[A-Za-z0-9]{2,6}" maxLength={6} style={{ minWidth: 90 }} /></label>
+                <button className="secondary">Cambiar prefijo</button>
+              </form>
+            )}
+            <p className="muted">Los códigos ya asignados no cambian.</p>
+          </div>
           <div className="card">
             <h3>Regiones / países de {org.name}</h3>
             <table><thead><tr><th>País</th><th>Región</th><th>Zona horaria</th></tr></thead><tbody>

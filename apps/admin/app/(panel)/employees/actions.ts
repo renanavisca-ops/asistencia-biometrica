@@ -1,32 +1,42 @@
 'use server';
 import { supabaseServer } from '@/lib/supabase/server';
 import { back, s } from '@/lib/actions';
+import { humanError } from '@/lib/context';
 
 export async function createEmployee(fd: FormData) {
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  const { data, error } = await sb.from('employees').insert({
-    organization_id: s(fd, 'org'), employee_code: s(fd, 'employee_code'), first_name: s(fd, 'first_name'),
-    last_name: s(fd, 'last_name'), document_last4: s(fd, 'document_last4'), hired_on: s(fd, 'hired_on'), created_by: user?.id,
-  }).select('id').single();
+  const { data, error } = await sb.rpc('create_employee', {
+    p_org: s(fd, 'org'), p_first_name: s(fd, 'first_name'), p_last_name: s(fd, 'last_name'),
+    p_document_type: s(fd, 'document_type'), p_document_country: s(fd, 'document_country'), p_document_number: s(fd, 'document_number'),
+    p_hired_on: s(fd, 'hired_on'), p_store_id: s(fd, 'store_id'),
+  });
   if (error || !data) back('/employees', fd, error, '');
-  const store = s(fd, 'store_id');
-  if (store) {
-    const { error: e2 } = await sb.from('employee_store_assignments').insert({
-      organization_id: s(fd, 'org'), employee_id: data.id, store_id: store, kind: 'permanent', created_by: user?.id, reason: 'alta',
-    });
-    if (e2) back(`/employees/${data.id}`, fd, e2, '');
-  }
-  back(`/employees/${data.id}`, fd, null, 'Empleado creado');
+  const r = data as { id: string; employeeCode: string };
+  back(`/employees/${r.id}`, fd, null, `Empleado creado con código ${r.employeeCode}`);
 }
 
 export async function updateEmployee(fd: FormData) {
   const sb = await supabaseServer();
   const id = s(fd, 'id')!;
-  const { error } = await sb.from('employees').update({
-    first_name: s(fd, 'first_name'), last_name: s(fd, 'last_name'), employee_code: s(fd, 'employee_code'), document_last4: s(fd, 'document_last4'),
-  }).eq('id', id);
+  const { error } = await sb.from('employees').update({ first_name: s(fd, 'first_name'), last_name: s(fd, 'last_name'), hired_on: s(fd, 'hired_on') }).eq('id', id);
   back(`/employees/${id}`, fd, error, 'Datos actualizados');
+}
+
+export async function setDocument(fd: FormData) {
+  const sb = await supabaseServer();
+  const id = s(fd, 'id')!;
+  const { error } = await sb.rpc('set_employee_document', {
+    p_employee_id: id, p_document_type: s(fd, 'document_type'), p_document_country: s(fd, 'document_country'),
+    p_document_number: s(fd, 'document_number'), p_reason: s(fd, 'reason') ?? '',
+  });
+  back(`/employees/${id}`, fd, error, 'Documento registrado (cifrado)');
+}
+
+/** Devuelve el número en la respuesta (nunca en la URL). Queda auditado en el servidor. */
+export async function revealDocument(_prev: { value?: string | null; error?: string } | null, fd: FormData) {
+  const sb = await supabaseServer();
+  const { data, error } = await sb.rpc('reveal_employee_document', { p_employee_id: s(fd, 'id'), p_reason: s(fd, 'reason') ?? '' });
+  return error ? { error: humanError(error) } : { value: (data as string | null) ?? null };
 }
 
 export async function setStatus(fd: FormData) {

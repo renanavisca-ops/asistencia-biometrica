@@ -51,8 +51,8 @@ select public.set_employee_document('a3000000-0000-4000-8000-000000000001', 'DPI
 select test.ok(public.verify_employee_document('a3000000-0000-4000-8000-000000000001', '9999999999999') ->> 'reason' = 'mismatch', 'número distinto: rechazado');
 select test.ok((public.verify_employee_document('a3000000-0000-4000-8000-000000000001', '1234567890123') ->> 'ok')::boolean, 'número correcto (sin espacios): verificado');
 -- [1,0,0] y [0,1,0] como float32 little-endian
-select test.ok(public.enroll_biometric('a3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000009','documento_presencial',
-  array['AACAPwAAAAAAAAAA','AAAAAAAAgD8AAAAA','AACAPwAAAAAAAAAA'],'{"brightness":0.6}',true,0.95,'c0000000-0000-4000-8000-000000000001',null) is not null, 'enrolamiento válido en sede central');
+select test.ok(public.enroll_biometric('a3000000-0000-4000-8000-000000000001',null,'a2000000-0000-4000-8000-000000000009','documento_presencial',
+  array['AACAPwAAAAAAAAAA','AAAAAAAAgD8AAAAA','AACAPwAAAAAAAAAA'],'{"brightness":0.6}',true,0.95,'c0000000-0000-4000-8000-000000000001',null) is not null, 'enrolamiento válido en sede central (sin consentimiento individual: lo cubren los términos aceptados por la empresa)');
 select test.ok((select count(*) from public.biometric_enrollments where employee_id = 'a3000000-0000-4000-8000-000000000001' and status = 'superseded') = 1, 'el enrolamiento anterior queda sustituido');
 select test.reset();
 

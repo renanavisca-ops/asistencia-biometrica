@@ -8,7 +8,7 @@ import { Camera } from './Camera.tsx';
 type Emp = { id: string; employee_code: string; first_name: string; last_name: string; status: string };
 type Step =
   | { s: 'login' } | { s: 'mfa'; factorId: string } | { s: 'list' }
-  | { s: 'prepare'; emp: Emp } | { s: 'capture'; emp: Emp; consentId: string; identity: string } | { s: 'done'; emp: Emp; message: string };
+  | { s: 'prepare'; emp: Emp } | { s: 'capture'; emp: Emp; consentId: string | null; identity: string } | { s: 'done'; emp: Emp; message: string };
 
 const DUP_THRESHOLD = 0.6; // provisional (Etapa 4 lo calibrará); se publica en docs/PRUEBAS_RECONOCIMIENTO.md
 const PAD_ENROLL_MIN = 0.8; // provisional
@@ -136,30 +136,20 @@ function EmployeeList({ sb, org, setErr, onPick }: { sb: SupabaseClient; org: st
   );
 }
 
-function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient; org: string; emp: Emp; setErr: (e: string | null) => void; onBack: () => void; onReady: (consentId: string, identity: string) => void }) {
-  const [consentId, setConsentId] = useState<string | null | undefined>(undefined);
-  const [signed, setSigned] = useState(false); const [docChecked, setDocChecked] = useState(false);
+function Prepare({ sb, emp, setErr, onBack, onReady }: { sb: SupabaseClient; org: string; emp: Emp; setErr: (e: string | null) => void; onBack: () => void; onReady: (consentId: string | null, identity: string) => void }) {
+  const [docChecked, setDocChecked] = useState(false);
   const docRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    sb.from('biometric_consents').select('id').eq('employee_id', emp.id).is('withdrawn_at', null).order('accepted_at', { ascending: false }).limit(1)
-      .then(({ data }) => setConsentId(data?.[0]?.id ?? null));
-  }, [sb, emp.id]);
-  if (consentId === undefined) return <p>Cargando…</p>;
   return (
     <div style={{ width: 'min(480px, 94vw)', display: 'grid', gap: 10, textAlign: 'left' }}>
       <h2 style={{ margin: 0 }}>{emp.first_name} {emp.last_name} <span className="muted">#{emp.employee_code}</span></h2>
-      {consentId ? <p>✅ Consentimiento biométrico vigente registrado.</p> : (
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 24, height: 24 }} checked={signed} onChange={(e) => setSigned(e.target.checked)} />
-          La persona firmó el consentimiento para el uso de su rostro en el control de asistencia.</label>
-      )}
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 24, height: 24 }} checked={docChecked} onChange={(e) => setDocChecked(e.target.checked)} />
         Verifiqué su identidad con el documento original.</label>
       <label style={{ display: 'grid', gap: 4 }}>Número de documento del empleado (se compara con el registrado):
         <input ref={docRef} name="doc" className="plain" placeholder="Escriba el número del documento original" inputMode="text"
           autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false} />
       </label>
-      <button className="btn primary" disabled={busy || !docChecked || (!consentId && !signed)} onClick={async () => {
+      <button className="btn primary" disabled={busy || !docChecked} onClick={async () => {
         setErr(null);
         const doc = (docRef.current?.value ?? '').replace(/[^A-Za-z0-9]/g, '');
         if (doc.length < 5) return setErr('Escriba el número de documento del empleado.');
@@ -169,15 +159,7 @@ function Prepare({ sb, org, emp, setErr, onBack, onReady }: { sb: SupabaseClient
         if (vErr) return setErr('No se pudo verificar el documento: ' + vErr.message);
         const ver = v as { ok: boolean; message?: string };
         if (!ver.ok) { if (docRef.current) docRef.current.value = ''; return setErr(ver.message ?? 'El documento no coincide.'); }
-        let cid = consentId;
-        if (!cid) {
-          const { data: u } = await sb.auth.getUser();
-          const { data, error } = await sb.from('biometric_consents').insert({ organization_id: org, employee_id: emp.id, legal_basis: 'consentimiento_expreso',
-            notice_version: 'v1', accepted_at: new Date().toISOString(), evidence_ref: 'Firmado en sede central (registrado en app)', recorded_by: u.user?.id }).select('id').single();
-          if (error || !data) return setErr('No se pudo registrar el consentimiento: ' + (error?.message ?? ''));
-          cid = data.id;
-        }
-        onReady(cid!, 'Documento original revisado en persona; número coincide con el registrado');
+        onReady(null, 'Documento original revisado en persona; número coincide con el registrado');
       }}>Continuar a la captura</button>
       <button className="btn small" onClick={onBack}>Volver</button>
     </div>
@@ -211,7 +193,7 @@ const STEPS = [
 ] as const;
 
 function Capture({ sb, org, emp, consentId, identity, setErr, onDone, onBack }: {
-  sb: SupabaseClient; org: string; emp: Emp; consentId: string; identity: string; setErr: (e: string | null) => void; onDone: (m: string) => void; onBack: () => void;
+  sb: SupabaseClient; org: string; emp: Emp; consentId: string | null; identity: string; setErr: (e: string | null) => void; onDone: (m: string) => void; onBack: () => void;
 }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const [hint, setHint] = useState('Preparando cámara…');

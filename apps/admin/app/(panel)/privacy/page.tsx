@@ -43,7 +43,7 @@ export default async function Privacy({ searchParams }: { searchParams: SP }) {
             <button className="secondary">Conceder acceso</button></form>
         )}
       </div>
-      <div className="notice">Hoy se ejecuta automáticamente el <b>borrado de datos biométricos</b> (plantillas, enrolamiento y retiro del consentimiento; los teléfonos los eliminan en su próxima sincronización).
+      <div className="notice">Hoy se ejecuta automáticamente el <b>borrado de datos biométricos</b> (plantillas y enrolamiento; los teléfonos los eliminan en su próxima sincronización).
         La exportación y el borrado de datos personales quedan registrados para ejecución manual: las marcaciones son registros laborales cuya retención depende de la legislación de cada país (pendiente de revisión legal).</div>
       <table><thead><tr><th>Fecha</th><th>Empleado</th><th>Tipo</th><th>Motivo</th><th>Estado</th><th></th></tr></thead><tbody>
         {(reqs ?? []).map((r) => {

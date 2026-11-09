@@ -2,16 +2,17 @@
  * Términos y condiciones del servicio (BORRADOR v1). Deben revisarse con un abogado en cada país antes de vender.
  * Se muestran en la app (registro de la organización) y en el panel (/terminos). La aceptación queda registrada con su versión.
  */
-export const TERMS_VERSION = 'v1-2026-11';
+export const TERMS_VERSION = 'v2-2026-11';
 export const PANEL_URL = 'https://asistencia-biometrica.vercel.app';
 
 export const TERMS: { title: string; body: string[] }[] = [
   { title: '1. Qué es el servicio', body: [
     'Plataforma de control de asistencia con reconocimiento facial para organizaciones (la «Organización»). Se ofrece «tal cual» y en versión de prueba: el reconocimiento facial y la prueba de vida son experimentales y pueden cometer errores.',
   ] },
-  { title: '2. Los datos son de la Organización', body: [
-    'Todos los datos registrados (sucursales, empleados, documentos, rostros, marcaciones y reportes) pertenecen a la Organización, que decide qué registra y para qué (responsable del tratamiento). El proveedor de la plataforma solo los procesa para prestar el servicio (encargado del tratamiento).',
-    'La Organización debe contar con base legal y con el consentimiento expreso de cada empleado para el uso de su rostro, informarle sus derechos y atender sus solicitudes de acceso, corrección y supresión.',
+  { title: '2. Aceptación y datos de la Organización', body: [
+    'Al registrarse, la Organización (por medio de la persona que la registra en su nombre) acepta estos términos y condiciones.',
+    'Todos los datos registrados (sucursales, empleados, documentos, rostros, marcaciones y reportes) pertenecen a la Organización, que decide qué registra y para qué. El proveedor de la plataforma solo los procesa para prestar el servicio.',
+    'La Organización se compromete a cuidar y proteger los datos de sus empleados tal como lo establece la ley de cada país donde opera, y es la única responsable de cumplirla, incluidas las autorizaciones, avisos o registros que esa ley exija para el uso del rostro y de los datos personales de sus empleados.',
   ] },
   { title: '3. No somos un servicio de conservación de registros', body: [
     'La plataforma NO es un archivo ni un sistema de conservación de registros laborales. No se garantiza conservar los datos durante los plazos que exige la legislación laboral, tributaria o de otro tipo de cada país.',

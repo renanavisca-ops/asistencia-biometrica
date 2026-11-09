@@ -90,14 +90,3 @@ export async function revokeAssignment(fd: FormData) {
   const { error } = await sb.rpc('revoke_assignment', { p_assignment_id: s(fd, 'assignment_id'), p_reason: s(fd, 'reason') ?? '' });
   back(`/employees/${id}`, fd, error, 'Asignación revocada; los teléfonos la eliminarán en su próxima sincronización');
 }
-
-export async function recordConsent(fd: FormData) {
-  const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  const id = s(fd, 'id')!;
-  const { error } = await sb.from('biometric_consents').insert({
-    organization_id: s(fd, 'org'), employee_id: id, legal_basis: s(fd, 'legal_basis'), notice_version: s(fd, 'notice_version'),
-    accepted_at: new Date(s(fd, 'accepted_at') ?? Date.now()).toISOString(), evidence_ref: s(fd, 'evidence_ref'), recorded_by: user?.id,
-  });
-  back(`/employees/${id}`, fd, error, 'Consentimiento registrado');
-}

@@ -73,7 +73,7 @@ export function OrgSignup({ onBack }: { onBack: () => void }) {
       )}
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 15, textAlign: 'left', width: 'min(520px, 92vw)' }}>
         <input type="checkbox" name="terms" style={{ width: 24, height: 24 }} />
-        Leí y acepto los términos: los datos son de mi organización, la plataforma no conserva registros por plazos legales y debo descargar mis datos.
+        Leí y acepto los términos en nombre de mi organización: los datos son de mi organización, me comprometo a cuidarlos como lo exige la ley, la plataforma no conserva registros por plazos legales y debo descargar mis datos.
       </label>
       {err && <p style={{ color: 'var(--err)', margin: 0 }}>{err}</p>}
       <button className="btn primary" disabled={busy}>{busy ? 'Registrando…' : 'Crear organización'}</button>

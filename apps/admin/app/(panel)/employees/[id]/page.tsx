@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
 import { fmtDateTime, fmtDuration, STATE_LABEL } from '@/lib/format';
-import { recordConsent, revokeAssignment, setDocument, setStatus, transfer, updateEmployee } from '../actions';
+import { revokeAssignment, setDocument, setStatus, transfer, updateEmployee } from '../actions';
 import { COUNTRIES, DOC_TYPES } from '@/lib/documents';
 import { RevealDocument } from './RevealDocument';
 
@@ -11,15 +11,14 @@ export default async function Employee({ params, searchParams }: { params: Promi
   const { supabase, org, orgWide, can } = await getContext(sp.org);
   const { data: e } = await supabase.from('employees').select('*').eq('id', id).maybeSingle();
   if (!e || !org) notFound();
-  const [{ data: asg }, { data: stores }, { data: consents }, { data: enr }, { data: sessions }, { data: hist }] = await Promise.all([
+  const [{ data: asg }, { data: stores }, { data: enr }, { data: sessions }, { data: hist }] = await Promise.all([
     supabase.from('employee_store_assignments').select('*, stores(name, code)').eq('employee_id', id).order('valid_from', { ascending: false }),
     supabase.from('stores').select('id, name, code').eq('organization_id', e.organization_id).eq('status', 'active').order('code'),
-    supabase.from('biometric_consents').select('*').eq('employee_id', id).order('accepted_at', { ascending: false }),
     supabase.from('biometric_enrollments').select('id, status, enrolled_at, sample_count, pad_passed, model_versions!biometric_enrollments_recognition_model_id_fkey(name, version)').eq('employee_id', id).order('enrolled_at', { ascending: false }),
     supabase.from('attendance_sessions').select('*, stores(name)').eq('employee_id', id).order('opened_at', { ascending: false, nullsFirst: false }).limit(20),
     supabase.from('employee_status_history').select('*').eq('employee_id', id).order('changed_at', { ascending: false }),
   ]);
-  const manage = orgWide('employee.manage'), assign = orgWide('assignment.manage'), enroll = orgWide('enrollment.manage');
+  const manage = orgWide('employee.manage'), assign = orgWide('assignment.manage');
   const now = Date.now();
   return (
     <>
@@ -113,8 +112,8 @@ export default async function Employee({ params, searchParams }: { params: Promi
 
       <div className="card">
         <h3>Biometría</h3>
-        <div className="notice"><b>Enrolamiento facial: NO IMPLEMENTADO.</b> Falta integrar y validar el modelo de reconocimiento y la prueba de vida.
-          El servidor ya exige sede central, consentimiento vigente, prueba de vida superada y 3–10 muestras (función <span className="mono">enroll_biometric</span>).</div>
+        <p className="muted">El rostro se registra desde un teléfono con permiso de enrolamiento (modo administrador), verificando el documento original.
+          Reconocimiento EXPERIMENTAL. La empresa es responsable de tratar estos datos conforme a la ley de su país (ver <a href="/terminos">términos</a>).</p>
         <h4>Enrolamientos</h4>
         {enr?.length ? (
           <table><thead><tr><th>Fecha</th><th>Estado</th><th>Muestras</th><th>Modelo</th></tr></thead><tbody>
@@ -122,20 +121,6 @@ export default async function Employee({ params, searchParams }: { params: Promi
               <td className="mono">{(x.model_versions as unknown as { name: string; version: string } | null)?.name}@{(x.model_versions as unknown as { version: string } | null)?.version}</td></tr>)}
           </tbody></table>
         ) : <p className="muted">Sin enrolamiento. Este empleado no podrá marcar en ningún teléfono.</p>}
-        <h4>Consentimiento / base legal</h4>
-        {consents?.length ? (
-          <ul>{consents.map((c) => <li key={c.id}>{c.legal_basis} · aviso {c.notice_version} · {fmtDateTime(c.accepted_at)} {c.withdrawn_at ? <span className="badge err">retirado {fmtDateTime(c.withdrawn_at)}</span> : <span className="badge ok">vigente</span>}</li>)}</ul>
-        ) : <p className="muted">Sin consentimiento registrado.</p>}
-        {enroll && (
-          <form action={recordConsent} className="inline">
-            <OrgField org={org.id} /><input type="hidden" name="id" value={e.id} />
-            <label>Base legal<select name="legal_basis"><option value="consentimiento_expreso">Consentimiento expreso por escrito</option></select></label>
-            <label>Versión del aviso<input name="notice_version" required placeholder="v1-2026" /></label>
-            <label>Fecha de firma<input type="datetime-local" name="accepted_at" required /></label>
-            <label>Referencia del documento firmado<input name="evidence_ref" placeholder="expediente / archivo" /></label>
-            <button className="secondary">Registrar consentimiento</button>
-          </form>
-        )}
       </div>
 
       {can('attendance.read') && (

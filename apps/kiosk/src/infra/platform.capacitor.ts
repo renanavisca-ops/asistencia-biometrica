@@ -3,7 +3,7 @@ import { Device } from '@capacitor/device';
 import type { Platform } from '../domain/platform.ts';
 import { DeviceClock } from './deviceClock.ts';
 
-export const APP_VERSION = '0.6.0';
+export const APP_VERSION = '0.6.1';
 
 /** Plataforma real: reloj monotónico y contador de arranques nativos (Android). En navegador, valores nulos. */
 export const capacitorPlatform: Platform = {

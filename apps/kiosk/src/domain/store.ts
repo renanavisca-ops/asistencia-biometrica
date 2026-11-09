@@ -19,6 +19,8 @@ export interface DeviceState {
   lastSyncAt: string | null; // última sincronización COMPLETA (push + pull) confirmada por el servidor
   /** Permiso de enrolamiento marcado en el panel (informativo; el servidor lo exige en cada enrolamiento). */
   canEnroll?: boolean;
+  /** 'read_only' = membresía vencida, suspendida o en eliminación: no se marca. */
+  orgAccess?: 'full' | 'read_only';
   activatedAt: string;
 }
 

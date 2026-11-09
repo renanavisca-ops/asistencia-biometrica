@@ -54,7 +54,7 @@ export interface SyncPullResponse {
   roster: RosterEntry[];
   /** Empleados cuyos datos locales deben eliminarse en esta sincronización. */
   revokedEmployeeIds: string[];
-  device: { status: 'active' | 'blocked' | 'retired'; storeId: string; storeName: string; timezone: string; canEnroll?: boolean };
+  device: { status: 'active' | 'blocked' | 'retired'; storeId: string; storeName: string; timezone: string; canEnroll?: boolean; orgAccess?: 'full' | 'read_only' };
 }
 
 export type ValidationError = { field: string; message: string };

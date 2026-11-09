@@ -1,13 +1,13 @@
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
-import { createOrganization, createRegion, createStore, setPrefix, setStoreStatus } from './actions';
+import { createRegion, createStore, setPrefix, setStoreStatus } from './actions';
 
 // Zonas horarias de Centroamérica (IANA). Se pueden escribir otras manualmente.
 const TZ = ['America/Guatemala', 'America/El_Salvador', 'America/Tegucigalpa', 'America/Managua', 'America/Costa_Rica', 'America/Panama', 'America/Belize'];
 
 export default async function Organizations({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const { supabase, org, isSuper, orgWide } = await getContext(sp.org);
+  const { supabase, org, orgWide } = await getContext(sp.org);
   const { data: orgRow } = org
     ? await supabase.from('organizations').select('employee_code_prefix, next_employee_number').eq('id', org.id).maybeSingle()
     : { data: null };
@@ -20,25 +20,15 @@ export default async function Organizations({ searchParams }: { searchParams: SP
   const canManage = org ? orgWide('store.manage') : false;
   return (
     <>
-      <h2>Organizaciones, regiones y sedes</h2>
+      <h2>Sucursales{org ? ` de ${org.name}` : ''}</h2>
       <Flash sp={sp} />
-      <p className="muted">Cada organización (negocio) tiene sus propias sedes sin límite y está aislada de las demás. Marque como “sede central” la sede donde se realizan los enrolamientos.</p>
-      {isSuper && (
-        <div className="card">
-          <h3>Nueva organización</h3>
-          <form action={createOrganization} className="inline">
-            <label>Nombre<input name="name" required minLength={2} /></label>
-            <label>Prefijo de códigos de empleado<input name="prefix" required pattern="[A-Za-z0-9]{2,6}" maxLength={6} placeholder="TAG" style={{ minWidth: 90 }} /></label>
-            <button>Crear</button>
-          </form>
-        </div>
-      )}
+      <p className="muted">Su organización puede tener todas las sucursales que necesite y está aislada de las demás. Marque como «sede central» la sucursal a la que se asocian los enrolamientos.</p>
       {org && (
         <>
           <div className="card">
             <h3>Códigos de empleado de {org.name}</h3>
             <p>Formato: <span className="mono">{orgRow?.employee_code_prefix}-000001</span> · próximo número: <b>{orgRow?.next_employee_number}</b></p>
-            {isSuper && (
+            {canManage && (
               <form action={setPrefix} className="inline">
                 <OrgField org={org.id} />
                 <label>Prefijo (2–6 letras/números)<input name="prefix" defaultValue={orgRow?.employee_code_prefix} required pattern="[A-Za-z0-9]{2,6}" maxLength={6} style={{ minWidth: 90 }} /></label>

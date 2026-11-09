@@ -19,13 +19,16 @@ export async function getContext(orgParam?: string) {
   const isSuper = g.some((x) => x.role === 'superadmin');
   const orgList = (orgs ?? []) as Org[];
   const org = orgList.find((o) => o.id === orgParam) ?? orgList[0] ?? null;
-  const roles = new Set(g.filter((x) => x.role === 'superadmin' || x.organization_id === org?.id).map((x) => x.role));
-  const can = (perm: string) => (perms ?? []).some((p) => roles.has(p.role) && p.permission === perm);
+  // El superadministrador NO tiene permisos dentro de las organizaciones (solo plataforma); con acceso de soporte ve en solo lectura.
+  const roles = new Set(g.filter((x) => x.role !== 'superadmin' && x.organization_id === org?.id).map((x) => x.role));
+  const support = isSuper && !!org && !g.some((x) => x.role !== 'superadmin' && x.organization_id === org.id);
+  const READ = ['store.read', 'employee.read', 'device.read', 'attendance.read', 'incident.read', 'audit.read', 'export.run'];
+  const can = (perm: string) => (support ? READ.includes(perm) : (perms ?? []).some((p) => roles.has(p.role) && p.permission === perm));
   // ¿El permiso es a nivel de organización completa (no solo una tienda/región)?
-  const orgWide = (perm: string) =>
-    g.some((x) => (x.role === 'superadmin' || (x.organization_id === org?.id && !x.store_id && !x.region_id)) &&
-      (perms ?? []).some((p) => p.role === x.role && p.permission === perm));
-  return { supabase, user, admin, grants: g, isSuper, orgs: orgList, org, can, orgWide };
+  const orgWide = (perm: string) => (support ? READ.includes(perm) :
+    g.some((x) => x.role !== 'superadmin' && x.organization_id === org?.id && !x.store_id && !x.region_id &&
+      (perms ?? []).some((p) => p.role === x.role && p.permission === perm)));
+  return { supabase, user, admin, grants: g, isSuper, support, orgs: orgList, org, can, orgWide };
 }
 
 export type Ctx = Awaited<ReturnType<typeof getContext>>;

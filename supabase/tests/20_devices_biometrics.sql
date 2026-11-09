@@ -82,8 +82,15 @@ insert into public.retention_requests (organization_id, employee_id, kind, reaso
 values ('a0000000-0000-4000-8000-000000000000', 'a3000000-0000-4000-8000-000000000001', 'erase_biometrics', 'Solicitud de la titular', '00000000-0000-4000-8000-00000000000b');
 select test.ok(test.raises($$select public.decide_retention_request((select id from public.retention_requests limit 1), true, 'x')$$), 'quien solicita no puede aprobar');
 select test.reset();
+-- El superadministrador ya no tiene permisos dentro de las organizaciones: aprueba otra administradora central (cuatro ojos).
+insert into auth.users (id, email) values ('00000000-0000-4000-8000-0000000000e2', 'ca2@x');
+insert into public.admins (user_id, display_name, email) values ('00000000-0000-4000-8000-0000000000e2', 'CA2', 'ca2@x');
+insert into public.admin_role_grants (user_id, role, organization_id) values ('00000000-0000-4000-8000-0000000000e2', 'central_admin', 'a0000000-0000-4000-8000-000000000000');
 select test.as_user('00000000-0000-4000-8000-00000000000a');
-select public.decide_retention_request((select id from public.retention_requests limit 1), true, 'Aprobado por superadmin');
+select test.ok(test.raises($$select public.decide_retention_request((select id from public.retention_requests limit 1), true, 'x')$$), 'superadministrador no decide dentro de una organización');
+select test.reset();
+select test.as_user('00000000-0000-4000-8000-0000000000e2');
+select public.decide_retention_request((select id from public.retention_requests limit 1), true, 'Aprobado por segunda administradora');
 select test.reset();
 set role service_role;
 select test.ok((select count(*) from private.biometric_template_versions where employee_id = 'a3000000-0000-4000-8000-000000000001') = 0, 'plantillas borradas tras supresión');

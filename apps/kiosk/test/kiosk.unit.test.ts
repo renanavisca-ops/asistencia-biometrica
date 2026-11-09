@@ -49,6 +49,12 @@ describe('KioskService (offline)', () => {
     platform.advance(4 * H);
     expect(await svc.punch(ident, { outKind: 'end' })).toMatchObject({ kind: 'recorded', outKind: 'end', shift: { workedMinutes: 480, breakMinutes: 60, complete: true } });
   });
+  it('membresía vencida o cuenta suspendida → no se marca', async () => {
+    const { svc, store } = setup();
+    store.state!.orgAccess = 'read_only';
+    expect(await svc.punch(ident)).toEqual({ kind: 'refused', reason: 'org_inactive' });
+    expect(store.events.length).toBe(0);
+  });
   it('ENTRADA → duplicado dentro de la ventana → SALIDA, todo sin red', async () => {
     const { svc, store, platform } = setup();
     expect(await svc.punch(ident)).toMatchObject({ kind: 'recorded', eventType: 'IN', displayName: 'María L.' });

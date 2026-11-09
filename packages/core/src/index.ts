@@ -7,3 +7,4 @@ export * from './clock.ts';
 export * from './matching.ts';
 export * from './protocol.ts';
 export * from './workday.ts';
+export * from './legal.ts';

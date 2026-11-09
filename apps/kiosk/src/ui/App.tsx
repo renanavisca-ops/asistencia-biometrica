@@ -12,6 +12,7 @@ import { formatCode, normalizeCode } from './activationCode.ts';
 import { FaceCapture, type CaptureOutcome } from './FaceCapture.tsx';
 import { EngineDiagnostics } from './EngineDiagnostics.tsx';
 import { Enrollment } from './Enrollment.tsx';
+import { OrgSignup } from './OrgSignup.tsx';
 
 type View =
   | { name: 'loading' } | { name: 'setup' } | { name: 'home' } | { name: 'capture' }
@@ -28,7 +29,8 @@ const NORMAL_FLAGS = new Set(['out_break', 'out_end', 'in_after_break', 'early_o
 const REFUSED: Record<string, string> = {
   not_activated: 'Teléfono no activado.', blocked: 'Teléfono bloqueado por administración.',
   unknown_employee: 'Persona no autorizada en esta tienda.', lease_expired: 'Autorización caducada: el teléfono necesita sincronizar con internet.',
-  offline_too_long: 'Demasiado tiempo sin conexión: conecte el teléfono a internet para seguir marcando.', storage_error: 'Error al guardar. Intente de nuevo; si persiste, avise al encargado.',
+  offline_too_long: 'Demasiado tiempo sin conexión: conecte el teléfono a internet para seguir marcando.',
+  org_inactive: 'La membresía de la organización está vencida o la cuenta está suspendida. No se pueden registrar marcaciones; avise al administrador.', storage_error: 'Error al guardar. Intente de nuevo; si persiste, avise al encargado.',
 };
 
 export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: boolean }) {
@@ -218,6 +220,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
 }
 
 function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
+  const [signup, setSignup] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -233,6 +236,7 @@ function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
     setWarn(typed.length > n.length && /[O0I1L]/.test(typed) ? 'Los códigos no usan las letras O, I, L ni los números 0 y 1.' : null);
     setCode(n); setErr(null);
   };
+  if (signup) return <OrgSignup onBack={() => setSignup(false)} />;
   return (
     <form className="screen" onSubmit={async (e) => { e.preventDefault(); if (code.length !== 12) return; setBusy(true); setErr(null); const r = await svc.activate(code); setBusy(false); r.ok ? onDone() : setErr(MSG[r.error] ?? r.error); }}>
       <h1>Activar teléfono de tienda</h1>
@@ -243,6 +247,9 @@ function Setup({ svc, onDone }: { svc: KioskService; onDone: () => void }) {
       {warn && <p style={{ color: 'var(--warn)', margin: 0 }}>{warn}</p>}
       {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
       <button className="btn primary" disabled={busy || code.length !== 12}>{busy ? 'Activando…' : 'Activar'}</button>
+      <hr style={{ width: 'min(420px, 90vw)', opacity: 0.3 }} />
+      <p className="muted" style={{ margin: 0 }}>¿Su empresa aún no usa el sistema?</p>
+      <button type="button" className="btn" onClick={() => setSignup(true)}>Crear mi organización</button>
     </form>
   );
 }

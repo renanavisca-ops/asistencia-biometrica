@@ -16,3 +16,24 @@ export async function decide(fd: FormData) {
   const { error } = await sb.rpc('decide_retention_request', { p_id: s(fd, 'id'), p_approve: s(fd, 'approve') === 'true', p_notes: s(fd, 'notes') ?? '' });
   back('/privacy', fd, error, 'Solicitud decidida');
 }
+
+export async function grantSupport(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('grant_support_access', { p_org: s(fd, 'org'), p_hours: Number(s(fd, 'hours') ?? 24), p_reason: s(fd, 'reason') });
+  back('/privacy', fd, error, 'Acceso de soporte concedido (solo lectura, temporal)');
+}
+export async function revokeSupport(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('revoke_support_access', { p_org: s(fd, 'org') });
+  back('/privacy', fd, error, 'Acceso de soporte retirado');
+}
+export async function requestDeletion(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('request_org_deletion', { p_org: s(fd, 'org'), p_confirm_name: s(fd, 'confirm') ?? '' });
+  back('/privacy', fd, error, 'Eliminación programada. Sus datos se conservarán 90 días por si desea volver; después se borrarán definitivamente.');
+}
+export async function cancelDeletion(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('cancel_org_deletion', { p_org: s(fd, 'org') });
+  back('/privacy', fd, error, 'Eliminación cancelada');
+}

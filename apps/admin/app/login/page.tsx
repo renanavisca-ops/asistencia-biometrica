@@ -20,6 +20,9 @@ export default function Login() {
     const { error } = await supabaseBrowser().auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) return setMsg({ kind: 'error', text: 'Credenciales inválidas o cuenta no confirmada.' });
+    // Registro hecho en la app: al primer inicio de sesión (correo ya confirmado) se crea la organización.
+    const { error: sErr } = await supabaseBrowser().rpc('complete_signup');
+    if (sErr) return setMsg({ kind: 'error', text: sErr.message });
     router.replace('/mfa'); router.refresh();
   }
   async function signUp() {
@@ -43,6 +46,7 @@ export default function Login() {
           {allowSignup && <button type="button" className="secondary" disabled={busy} onClick={signUp}>Crear cuenta (arranque inicial)</button>}
         </form>
       </div>
+      <p className="muted" style={{ fontSize: 13, textAlign: 'center' }}>¿Empresa nueva? Regístrela desde la app del teléfono («Crear mi organización»). · <a href="/terminos">Términos y condiciones</a></p>
     </main>
   );
 }

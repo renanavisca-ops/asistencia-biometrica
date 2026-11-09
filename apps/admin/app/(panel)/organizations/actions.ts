@@ -2,13 +2,6 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import { back, s } from '@/lib/actions';
 
-export async function createOrganization(fd: FormData) {
-  const sb = await supabaseServer();
-  const { data, error } = await sb.from('organizations').insert({ name: s(fd, 'name'), employee_code_prefix: (s(fd, 'prefix') ?? 'EMP').toUpperCase() }).select('id').single();
-  if (!error && data) fd.set('org', data.id);
-  back('/organizations', fd, error, 'Organización creada');
-}
-
 export async function createRegion(fd: FormData) {
   const sb = await supabaseServer();
   const { error } = await sb.from('regions').insert({

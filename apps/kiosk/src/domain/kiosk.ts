@@ -31,7 +31,7 @@ export type PunchResult =
   | { kind: 'duplicate'; eventType: EventType; displayName: string; secondsSince: number }
   /** Sesión abierta: la app pregunta «Salida a almuerzo» o «Salida (fin de turno)» y llama a punch(id, { outKind }). */
   | { kind: 'choose_out'; displayName: string; gender: 'F' | 'M' | null; minutesSince: number; early: boolean; inAtMs: number }
-  | { kind: 'refused'; reason: 'not_activated' | 'blocked' | 'unknown_employee' | 'lease_expired' | 'offline_too_long' | 'storage_error' };
+  | { kind: 'refused'; reason: 'not_activated' | 'blocked' | 'unknown_employee' | 'lease_expired' | 'offline_too_long' | 'storage_error' | 'org_inactive' };
 
 export type SyncResult =
   | { ok: true; pushed: number; acks: Record<LocalEventStatus, number>; rosterSize: number; revoked: number; deviceStatus: string }
@@ -85,6 +85,7 @@ export class KioskService {
     const st = await this.store.getState();
     if (!st) return { kind: 'refused', reason: 'not_activated' };
     if (st.status !== 'active') return { kind: 'refused', reason: 'blocked' };
+    if (st.orgAccess === 'read_only') return { kind: 'refused', reason: 'org_inactive' };
     const now = this.platform.nowMs();
     const roster = await this.store.getRoster();
     const emp = roster.find((r) => r.employeeId === id.employeeId);
@@ -201,7 +202,7 @@ export class KioskService {
       await this.store.replaceRoster(pull.roster as RosterEntry[]);
       await this.store.saveState({
         ...st, policy: normalizePolicy(pull.policy), rosterVersion: pull.rosterVersion, storeId: pull.device.storeId,
-        storeName: pull.device.storeName, timezone: pull.device.timezone, lastSyncAt: pull.serverTime, canEnroll: pull.device.canEnroll === true,
+        storeName: pull.device.storeName, timezone: pull.device.timezone, lastSyncAt: pull.serverTime, canEnroll: pull.device.canEnroll === true, orgAccess: pull.device.orgAccess === 'read_only' ? 'read_only' : 'full',
       });
       return { ok: true, pushed, acks: acc, rosterSize: pull.roster.length, revoked: pull.revokedEmployeeIds.length, deviceStatus: 'active' };
     } catch (e) {

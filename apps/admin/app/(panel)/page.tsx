@@ -12,7 +12,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
       <div className="card">
         <h2>Bienvenido</h2>
         <p>No hay organizaciones visibles todavía.</p>
-        {isSuper && <Link href="/organizations">Crear la primera organización →</Link>}
+        {isSuper && <p>Como superadministrador usted ve el uso de las organizaciones en <Link href="/platform">★ Plataforma</Link>. No ve sus datos salvo que una organización le conceda acceso de soporte. Para su propia empresa, créela allí (sin límite).</p>}
       </div>
     );
   }

@@ -27,15 +27,27 @@ function setup(fetchImpl?: Fetch) {
 const ident = { employeeId: EMP, matchScore: null, matchMargin: null, padScore: null, recognitionModel: 'SIMULADO@0', padModel: null };
 
 describe('KioskService (offline)', () => {
-  it('salida a los 3 min pide confirmación; sin confirmar no registra; confirmada registra SALIDA', async () => {
+  it('con sesión abierta pregunta almuerzo/fin de turno; sin elegir no registra; la salida temprana queda marcada', async () => {
     const { svc, store, platform } = setup();
     await svc.punch(ident);
     platform.advance(3 * 60_000);
-    expect(await svc.punch(ident)).toMatchObject({ kind: 'confirm_early_out', minutesSince: 3, displayName: 'María L.' });
+    expect(await svc.punch(ident)).toMatchObject({ kind: 'choose_out', minutesSince: 3, early: true, displayName: 'María L.' });
     expect(store.events.length).toBe(1);
-    const r = await svc.punch(ident, { confirmEarlyOut: true });
-    expect(r).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
-    expect(store.events[1]!.payload.decisionFlags).toContain('early_out_confirmed');
+    const r = await svc.punch(ident, { outKind: 'end' });
+    expect(r).toMatchObject({ kind: 'recorded', eventType: 'OUT', outKind: 'end', shift: { workedMinutes: 3, breakMinutes: 0, complete: true } });
+    expect(store.events[1]!.payload.decisionFlags).toEqual(expect.arrayContaining(['out_end', 'early_out_confirmed']));
+  });
+  it('jornada con almuerzo: saludo de regreso y resumen del turno al salir (firmado en el evento)', async () => {
+    const { svc, store, platform } = setup();
+    store.roster[0]!.gender = 'F';
+    expect(await svc.punch(ident)).toMatchObject({ kind: 'recorded', eventType: 'IN', gender: 'F', breakMinutes: null });
+    platform.advance(4 * H);
+    expect(await svc.punch(ident, { outKind: 'break' })).toMatchObject({ kind: 'recorded', eventType: 'OUT', outKind: 'break' });
+    platform.advance(H);
+    expect(await svc.punch(ident)).toMatchObject({ kind: 'recorded', eventType: 'IN', breakMinutes: 60 });
+    expect(store.events[2]!.payload.decisionFlags).toContain('in_after_break');
+    platform.advance(4 * H);
+    expect(await svc.punch(ident, { outKind: 'end' })).toMatchObject({ kind: 'recorded', outKind: 'end', shift: { workedMinutes: 480, breakMinutes: 60, complete: true } });
   });
   it('ENTRADA → duplicado dentro de la ventana → SALIDA, todo sin red', async () => {
     const { svc, store, platform } = setup();
@@ -43,7 +55,7 @@ describe('KioskService (offline)', () => {
     platform.advance(30_000);
     expect(await svc.punch(ident)).toMatchObject({ kind: 'duplicate', eventType: 'IN', secondsSince: 30 });
     platform.advance(8 * H);
-    expect(await svc.punch(ident)).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
+    expect(await svc.punch(ident, { outKind: 'end' })).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
     expect(store.events.map((e) => [e.seq, e.eventType, e.status])).toEqual([[1, 'IN', 'pending'], [2, 'OUT', 'pending']]);
     expect(store.state!.nextSeq).toBe(3);
   });
@@ -53,7 +65,7 @@ describe('KioskService (offline)', () => {
     platform.wall += 10 * H; platform.mono! += 20_000; // el usuario adelanta 10 h; solo pasaron 20 s
     expect((await svc.punch(ident)).kind).toBe('duplicate');
     platform.advance(9 * H);
-    const r = await svc.punch(ident);
+    const r = await svc.punch(ident, { outKind: 'end' });
     expect(r).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
     // La hora registrada es la estimada (servidor + monotónico), no la manipulada; y queda marcada.
     const ev = store.events[1]!;

@@ -79,6 +79,10 @@ export class SqliteStore implements LocalStore {
     const r = await this.db.query(`select * from events where employee_id = ? and status <> 'rejected' order by occurred_at_ms desc, seq desc limit 1`, [employeeId]);
     return r.values?.[0] ? this.row(r.values[0]) : null;
   }
+  async eventsFor(employeeId: string, sinceMs: number) {
+    const r = await this.db.query(`select * from events where employee_id = ? and status <> 'rejected' and occurred_at_ms >= ? order by occurred_at_ms, seq`, [employeeId, sinceMs]);
+    return (r.values ?? []).map((x) => this.row(x));
+  }
   async pendingEvents(limit: number) {
     const r = await this.db.query(`select * from events where status = 'pending' order by seq limit ?`, [limit]);
     return (r.values ?? []).map((x) => this.row(x));

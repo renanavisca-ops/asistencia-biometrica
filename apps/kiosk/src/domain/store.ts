@@ -46,6 +46,8 @@ export interface LocalStore {
   replaceRoster(entries: RosterEntry[]): Promise<void>;
   appendEvent(e: LocalEvent, nextSeq: number): Promise<void>;
   lastEventFor(employeeId: string): Promise<LocalEvent | null>;
+  /** Marcaciones del empleado en este teléfono desde `sinceMs` (para el resumen del turno al salir). */
+  eventsFor(employeeId: string, sinceMs: number): Promise<LocalEvent[]>;
   pendingEvents(limit: number): Promise<LocalEvent[]>;
   eventsByIds(ids: string[]): Promise<LocalEvent[]>;
   markEvents(acks: { eventId: string; status: LocalEventStatus; reason: string | null }[]): Promise<void>;
@@ -78,6 +80,10 @@ export class MemoryStore implements LocalStore {
     const list = this.events.filter((e) => e.employeeId === employeeId && e.status !== 'rejected')
       .sort((a, b) => b.occurredAtMs - a.occurredAtMs || b.seq - a.seq);
     return list[0] ? structuredClone(list[0]) : null;
+  }
+  async eventsFor(employeeId: string, sinceMs: number) {
+    return structuredClone(this.events.filter((e) => e.employeeId === employeeId && e.status !== 'rejected' && e.occurredAtMs >= sinceMs)
+      .sort((a, b) => a.occurredAtMs - b.occurredAtMs || a.seq - b.seq));
   }
   async pendingEvents(limit: number) {
     return structuredClone(this.events.filter((e) => e.status === 'pending').sort((a, b) => a.seq - b.seq).slice(0, limit));

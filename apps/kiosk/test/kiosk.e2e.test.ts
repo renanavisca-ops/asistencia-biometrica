@@ -75,6 +75,9 @@ d('kiosk ↔ device-api ↔ Postgres', () => {
       await asAdmin(async (tx) => {
         const [c] = await tx`insert into public.biometric_consents (organization_id, employee_id, legal_basis, notice_version, accepted_at, recorded_by)
           values (${ORG}, ${e}, 'consentimiento_expreso', 'v1', now(), ${ADMIN}) returning id`;
+        const doc = e === ANA ? '1111111111111' : '2222222222222';
+        await tx`select public.set_employee_document(${e}::uuid, 'DPI', 'GT', ${doc}, 'prueba automatizada')`;
+        await tx`select public.verify_employee_document(${e}::uuid, ${doc})`;
         await tx`select public.enroll_biometric(${e}::uuid, ${c!.id}::uuid, ${HQ}::uuid, 'documento', ${tx.array([vec, vec, vec])}::text[], '{}'::jsonb, true, 0.9, ${MODEL}::uuid, null)`;
       });
     }
@@ -94,7 +97,7 @@ d('kiosk ↔ device-api ↔ Postgres', () => {
     A.platform.advance(60_000);
     expect(await A.svc.punch(id(LUIS))).toMatchObject({ kind: 'recorded', eventType: 'IN' });
     A.platform.advance(8 * 3_600_000);
-    expect(await A.svc.punch(id(ANA))).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
+    expect(await A.svc.punch(id(ANA), { outKind: 'end' })).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
     expect((await A.svc.sync()).ok).toBe(false);
     expect((await A.store.counts()).pending).toBe(3);
 
@@ -112,7 +115,8 @@ d('kiosk ↔ device-api ↔ Postgres', () => {
     // 4. Segundo teléfono de la misma tienda: continúa la alternancia de Luis (SALIDA) gracias al roster.
     const B = mk(); B.platform.wall = A.platform.wall + 60_000;
     await B.svc.activate(await code(DEV2)); await B.svc.sync();
-    expect(await B.svc.punch(id(LUIS))).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
+    expect(await B.svc.punch(id(LUIS))).toMatchObject({ kind: 'choose_out' });
+    expect(await B.svc.punch(id(LUIS), { outKind: 'end' })).toMatchObject({ kind: 'recorded', eventType: 'OUT' });
     expect(await B.svc.sync()).toMatchObject({ ok: true, acks: { accepted: 1 } });
 
     // 5. Traslado de Luis a S2: el teléfono de S1 lo elimina en la siguiente sincronización.

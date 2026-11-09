@@ -10,7 +10,7 @@ import type { DetectedFace } from './types.ts';
  */
 export type ChallengeKind = 'blink' | 'turn_left' | 'turn_right';
 export const CHALLENGE_TEXT: Record<ChallengeKind, string> = {
-  blink: 'Parpadee dos veces', turn_left: 'Gire un poco la cabeza a su izquierda', turn_right: 'Gire un poco la cabeza a su derecha',
+  blink: 'Parpadee una vez', turn_left: 'Gire un poco la cabeza a su izquierda', turn_right: 'Gire un poco la cabeza a su derecha',
 };
 
 export function randomChallenge(rand = Math.random()): ChallengeKind {

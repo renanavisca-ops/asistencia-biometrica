@@ -55,6 +55,11 @@ function Fields({ org, stores, defaultCountry, v, state, action, pending }: {
         {err('first_name') && <span style={{ color: 'var(--danger)' }}>{err('first_name')}</span>}
       </label>
       <label>Apellido(s)<input name="last_name" required defaultValue={keep('last_name')} /></label>
+      <label>Género (saludo)
+        <select name="gender" defaultValue={keep('gender')}>
+          <option value="">No indicado</option><option value="F">Femenino</option><option value="M">Masculino</option>
+        </select>
+      </label>
       <label>Tipo de documento
         <select name="document_type" value={type} onChange={(e) => setType(e.target.value)}>{DOC_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       </label>

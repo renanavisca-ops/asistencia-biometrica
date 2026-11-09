@@ -11,10 +11,10 @@ export type CaptureOutcome =
   | { kind: 'liveness_failed'; reason: 'passive' | 'challenge_timeout' | 'identity_changed'; score?: number; threshold?: number }
   | { kind: 'uncalibrated' }
   | { kind: 'no_templates' }
-  | { kind: 'timeout' }
+  | { kind: 'timeout'; stage?: string }
   | { kind: 'engine_error'; message: string };
 
-const FRONTAL_FRAMES = 3;
+const FRONTAL_FRAMES = 2;
 const MAX_MS = 30_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -41,6 +41,7 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
       const t0 = performance.now();
       const timeLeft = () => !stop && performance.now() - t0 < MAX_MS;
 
+      let lastIssue: string | null = null;
       /** Recoge N fotogramas frontales de calidad: embeddings + puntuación pasiva. */
       const frontal = async (n: number) => {
         const embs: Float32Array[] = []; const pads: number[] = [];
@@ -48,7 +49,12 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
           const v = video.current;
           if (!v || v.readyState < 2) { await sleep(100); continue; }
           const a = await eng.analyze(v, performance.now());
-          if (!a.quality.ok || !a.aligned) { embs.length = 0; pads.length = 0; setHint(QUALITY_MESSAGE[a.quality.issues[0]!]); await sleep(60); continue; }
+          if (!a.quality.ok || !a.aligned) {
+            lastIssue = a.quality.issues[0] ?? lastIssue;
+            // Si la cara desaparece o hay otra persona, se empieza de nuevo; un fotograma borroso suelto no descarta lo ya tomado.
+            if (a.faces.length !== 1) { embs.length = 0; pads.length = 0; }
+            setHint(QUALITY_MESSAGE[a.quality.issues[0]!]); await sleep(60); continue;
+          }
           setHint('No se mueva…');
           embs.push(await eng.embed(a.aligned));
           pads.push(await eng.liveness.score(v, a.faces[0]!));
@@ -58,13 +64,13 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
       };
 
       const A = await frontal(FRONTAL_FRAMES);
-      if (!A) return finish({ kind: 'timeout' });
+      if (!A) return finish({ kind: 'timeout', stage: `frente:${lastIssue ?? '-'}` });
 
       let passive = A.pad;
       let challengeKind: string | null = null;
       let B = A;
       if (policy.activeChallenge !== 0) {
-        const ch = new ActiveChallenge(randomChallenge());
+        const ch = new ActiveChallenge('blink'); // al marcar: solo parpadeo (decisión del propietario; el enrolamiento usa la secuencia completa)
         challengeKind = ch.kind;
         setChallengeText(CHALLENGE_TEXT[ch.kind]); setHint('');
         const tc = performance.now();
@@ -82,11 +88,11 @@ export function FaceCapture({ roster, policy, onDone }: { roster: RosterEntry[];
           if (ch.update(faces[0]!)) { done = true; break; }
         }
         setChallengeText(null);
-        if (!done) return finish({ kind: 'liveness_failed', reason: 'challenge_timeout' });
+        if (!done) return finish({ kind: 'liveness_failed', reason: 'challenge_timeout', score: policy.challengeTimeoutSec, threshold: policy.challengeTimeoutSec });
         setHint('Ahora mire de frente y quédese quieto');
         await sleep(700); // deja que la cabeza vuelva al frente: los fotogramas movidos bajan la prueba pasiva
         const b = await frontal(FRONTAL_FRAMES);
-        if (!b) return finish({ kind: 'timeout' });
+        if (!b) return finish({ kind: 'timeout', stage: `tras_desafio:${lastIssue ?? '-'}` });
         B = b;
         passive = (A.pad + B.pad) / 2;
         // Continuidad: la persona tras el desafío debe ser la misma que antes.

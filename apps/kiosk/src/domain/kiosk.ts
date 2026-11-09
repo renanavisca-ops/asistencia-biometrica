@@ -1,7 +1,7 @@
 import {
-  assessClock, decideNextEvent, estimateServerTimeRef, generateDeviceKeyPair, signEvent, b64urlDecode, b64urlEncode,
+  assessClock, decideNextEvent, estimateServerTimeRef, generateDeviceKeyPair, signEvent, b64urlDecode, b64urlEncode, outKindFromFlags, shiftSummary,
   DEFAULT_POLICY, MAX_EVENTS_PER_BATCH, PROTOCOL_VERSION,
-  type AttendanceEventPayload, type DevicePolicy, type EventType, type RosterEntry,
+  type AttendanceEventPayload, type DevicePolicy, type EventType, type OutKind, type RosterEntry,
 } from '@asistencia/core';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { ApiError, type DeviceApi } from './http.ts';
@@ -19,10 +19,18 @@ export interface Identification {
 }
 
 export type PunchResult =
-  | { kind: 'recorded'; eventType: EventType; displayName: string; at: number; flags: string[]; synced: false }
+  | {
+      kind: 'recorded'; eventType: EventType; displayName: string; gender: 'F' | 'M' | null; at: number; flags: string[]; synced: false;
+      /** Solo salidas: almuerzo/pausa o fin de turno. */
+      outKind: OutKind | null;
+      /** Entrada de regreso del almuerzo: minutos fuera (si se conoce). */
+      breakMinutes: number | null;
+      /** Fin de turno: resumen calculado con las marcaciones conocidas por este teléfono. */
+      shift: { workedMinutes: number; breakMinutes: number; complete: boolean } | null;
+    }
   | { kind: 'duplicate'; eventType: EventType; displayName: string; secondsSince: number }
-  /** Salida antes del tiempo mínimo: la app debe preguntar y, si confirma, llamar a punch(id, { confirmEarlyOut: true }). */
-  | { kind: 'confirm_early_out'; displayName: string; minutesSince: number; inAtMs: number }
+  /** Sesión abierta: la app pregunta «Salida a almuerzo» o «Salida (fin de turno)» y llama a punch(id, { outKind }). */
+  | { kind: 'choose_out'; displayName: string; gender: 'F' | 'M' | null; minutesSince: number; early: boolean; inAtMs: number }
   | { kind: 'refused'; reason: 'not_activated' | 'blocked' | 'unknown_employee' | 'lease_expired' | 'offline_too_long' | 'storage_error' };
 
 export type SyncResult =
@@ -73,7 +81,7 @@ export class KioskService {
   }
 
   /** Registra una marcación tras identificar a la persona. Todo ocurre localmente, sin red. */
-  async punch(id: Identification, opts: { confirmEarlyOut?: boolean } = {}): Promise<PunchResult> {
+  async punch(id: Identification, opts: { outKind?: OutKind } = {}): Promise<PunchResult> {
     const st = await this.store.getState();
     if (!st) return { kind: 'refused', reason: 'not_activated' };
     if (st.status !== 'active') return { kind: 'refused', reason: 'blocked' };
@@ -94,12 +102,14 @@ export class KioskService {
     const server = emp.lastEvent;
     const serverMs = server ? Date.parse(server.occurredAt) : -Infinity;
     const last = local && local.occurredAtMs >= serverMs
-      ? { id: local.id, eventType: local.eventType, occurredAtMs: local.occurredAtMs, monotonicMs: local.monotonicMs, bootId: local.bootId }
-      : server ? { id: server.id, eventType: server.eventType, occurredAtMs: serverMs, monotonicMs: null, bootId: null } : null;
+      ? { id: local.id, eventType: local.eventType, occurredAtMs: local.occurredAtMs, monotonicMs: local.monotonicMs, bootId: local.bootId,
+          outKind: outKindFromFlags(local.payload.decisionFlags) }
+      : server ? { id: server.id, eventType: server.eventType, occurredAtMs: serverMs, monotonicMs: null, bootId: null, outKind: server.outKind ?? null } : null;
 
-    const decision = decideNextEvent({ last, nowMs: clock.bestEstimateMs, nowMonotonicMs: mono, bootId, policy: st.policy, confirmEarlyOut: opts.confirmEarlyOut });
-    if (decision.kind === 'confirm_early_out') {
-      return { kind: 'confirm_early_out', displayName: emp.displayName, minutesSince: decision.minutesSince, inAtMs: decision.lastEvent.occurredAtMs };
+    const gender = emp.gender ?? null;
+    const decision = decideNextEvent({ last, nowMs: clock.bestEstimateMs, nowMonotonicMs: mono, bootId, policy: st.policy, outKind: opts.outKind });
+    if (decision.kind === 'choose_out') {
+      return { kind: 'choose_out', displayName: emp.displayName, gender, minutesSince: decision.minutesSince, early: decision.early, inAtMs: decision.lastEvent.occurredAtMs };
     }
     if (decision.kind === 'duplicate') {
       return { kind: 'duplicate', eventType: decision.lastEvent.eventType, displayName: emp.displayName, secondsSince: decision.secondsSince };
@@ -124,7 +134,19 @@ export class KioskService {
       // Si el guardado falla, el estado no cambia: no hay evento ni secuencia consumida.
       return { kind: 'refused', reason: 'storage_error' };
     }
-    return { kind: 'recorded', eventType: decision.eventType, displayName: emp.displayName, at: clock.bestEstimateMs, flags: [...clock.flags, ...decision.flags], synced: false };
+    const outKind = decision.eventType === 'OUT' ? (opts.outKind ?? null) : null;
+    const breakMinutes = decision.flags.includes('in_after_break') && last ? Math.max(0, Math.round((clock.bestEstimateMs - last.occurredAtMs) / 60_000)) : null;
+    let shift: Extract<PunchResult, { kind: 'recorded' }>['shift'] = null;
+    if (outKind === 'end') {
+      const evs = await this.store.eventsFor(id.employeeId, clock.bestEstimateMs - 36 * 3_600_000).catch(() => []);
+      const list = evs.map((e) => ({ eventType: e.eventType, occurredAtMs: e.occurredAtMs, outKind: outKindFromFlags(e.payload.decisionFlags) }));
+      // Si la entrada se hizo en otro teléfono, se usa la referencia del servidor como inicio conocido.
+      if (!list.some((e) => e.eventType === 'IN') && server?.eventType === 'IN') list.unshift({ eventType: 'IN', occurredAtMs: serverMs, outKind: null });
+      const r = shiftSummary(list, { pauseMaxMinutes: st.policy.pauseMaxMinutes });
+      shift = { workedMinutes: r.workedMinutes, breakMinutes: r.breakMinutes, complete: r.complete };
+    }
+    return { kind: 'recorded', eventType: decision.eventType, displayName: emp.displayName, gender, at: clock.bestEstimateMs,
+      flags: [...clock.flags, ...decision.flags], synced: false, outKind, breakMinutes, shift };
   }
 
   /** Sincronización idempotente: sube la cola (reutilizando el batchId en reintentos) y descarga roster/política. */

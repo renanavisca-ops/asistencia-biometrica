@@ -34,6 +34,13 @@ export default async function Employee({ params, searchParams }: { params: Promi
               <label>Código (automático, no editable)<input value={e.employee_code} disabled /></label>
               <label>Nombre(s)<input name="first_name" defaultValue={e.first_name} required /></label>
               <label>Apellido(s)<input name="last_name" defaultValue={e.last_name} required /></label>
+              <label>Género (para el saludo en el teléfono)
+                <select name="gender" defaultValue={e.gender ?? ''}>
+                  <option value="">No indicado (saludo neutro: «Bienvenido(a)»)</option>
+                  <option value="F">Femenino («Bienvenida»)</option>
+                  <option value="M">Masculino («Bienvenido»)</option>
+                </select>
+              </label>
               <label>Fecha de ingreso<input type="date" name="hired_on" defaultValue={e.hired_on ?? ''} /></label>
               <button>Guardar</button>
             </form>

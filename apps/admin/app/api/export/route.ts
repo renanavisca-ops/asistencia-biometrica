@@ -27,9 +27,10 @@ export async function GET(req: NextRequest) {
     const [{ data, error }, pol] = await Promise.all([querySessions(sb, f, 50000), orgPolicy(sb, org)]);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     const loc = (ms: number | null, tz: string) => ms == null ? '' : new Date(ms).toLocaleString('sv-SE', { timeZone: tz });
-    header = ['fecha', 'codigo_empleado', 'empleado', 'sede', 'primera_entrada_local', 'ultima_salida_local', 'presente_minutos', 'pausas', 'pausa_minutos', 'en_curso', 'requiere_revision'];
+    header = ['fecha', 'codigo_empleado', 'empleado', 'sucursal', 'entrada_local', 'salida_local', 'laborado_minutos', 'almuerzo_pausa_minutos', 'estado', 'requiere_revision'];
     rows = workdaysFrom((data ?? []) as unknown as SessionRow[], pol).map((d) => [d.date, d.employee.employee_code, `${d.employee.last_name}, ${d.employee.first_name}`,
-      d.store.code, loc(d.firstInMs, d.store.timezone), loc(d.lastOutMs, d.store.timezone), d.presentMinutes, d.pauses.length, d.pauseMinutes, d.open, d.needsReview]);
+      d.store.code, loc(d.firstInMs, d.store.timezone), d.open || d.onBreak ? '' : loc(d.lastOutMs, d.store.timezone), d.presentMinutes, d.pauseMinutes,
+      d.open ? 'en turno' : d.onBreak ? 'en almuerzo' : 'terminó', d.needsReview]);
   } else if (type === 'events') {
     const { data, error } = await queryEvents(sb, f, 50000);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

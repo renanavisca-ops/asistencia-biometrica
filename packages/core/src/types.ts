@@ -14,7 +14,16 @@ export type DecisionFlag =
   | ClockFlag
   | 'stale_open_session' // la sesión previa llevaba abierta más del umbral: se registra ENTRADA y se abre incidencia de salida omitida
   | 'long_session_out' // salida tras una permanencia larga pero dentro del umbral de caducidad
-  | 'early_out_confirmed'; // salida antes del tiempo mínimo, confirmada por la persona en pantalla
+  | 'early_out_confirmed' // salida (fin de turno) antes del tiempo mínimo, elegida por la persona en pantalla
+  | 'out_break' // salida a almuerzo/pausa elegida en pantalla (la jornada continúa)
+  | 'out_end' // salida de fin de turno elegida en pantalla (la jornada termina)
+  | 'in_after_break'; // entrada de regreso de almuerzo/pausa
+
+/** Tipo de salida elegido por la persona: almuerzo/pausa o fin de turno. */
+export type OutKind = 'break' | 'end';
+/** Deduce el tipo de salida de los indicadores firmados del evento (null = versión antigua sin elección). */
+export const outKindFromFlags = (flags: readonly string[] | null | undefined): OutKind | null =>
+  flags?.includes('out_break') ? 'break' : flags?.includes('out_end') ? 'end' : null;
 
 /** Política operativa que el servidor distribuye a cada dispositivo (versionada). */
 export interface DevicePolicy {
@@ -113,6 +122,8 @@ export interface SignedAttendanceEvent extends AttendanceEventPayload {
 export interface LastEventRef {
   id: string;
   eventType: EventType;
+  /** Para salidas: almuerzo/pausa o fin de turno (null si se desconoce). */
+  outKind?: OutKind | null;
   occurredAtMs: number;
   monotonicMs: number | null;
   bootId: string | null;

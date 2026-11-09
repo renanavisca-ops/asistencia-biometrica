@@ -62,7 +62,7 @@ await page.click('text=Toque la pantalla');
 // La instrucción del desafío debe llegar a pintarse en pantalla (antes el bucle bloqueaba el repintado).
 const challengeShown = page.waitForSelector('text=/Parpadee|Gire un poco/', { timeout: 30000 }).then(() => true, () => false);
 const outcome = await Promise.race([
-  page.waitForSelector('text=ENTRADA REGISTRADA', { timeout: 60000 }).then(() => 'ENTRADA'),
+  page.waitForSelector('text=Entrada registrada', { timeout: 60000 }).then(() => 'ENTRADA'),
   page.waitForSelector('text=No reconocido', { timeout: 60000 }).then(() => 'NO_RECONOCIDO'),
   page.waitForSelector('text=Enrolamiento facial pendiente', { timeout: 60000 }).then(() => 'SIN_PLANTILLAS'),
   page.waitForSelector('text=sin calibrar', { timeout: 60000 }).then(() => 'SIN_CALIBRAR'),

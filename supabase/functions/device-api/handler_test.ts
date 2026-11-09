@@ -43,6 +43,8 @@ async function seed() {
   await sql.begin(async (tx) => {
     await tx.unsafe(`set local role authenticated`);
     await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ADMIN, aal: 'aal2' })}, true)`;
+    await tx`select public.set_employee_document(${EMP}::uuid, 'DPI', 'GT', '1234567890123', 'prueba automatizada')`;
+    await tx`select public.verify_employee_document(${EMP}::uuid, '1234567890123')`;
     await tx`select public.enroll_biometric(${EMP}::uuid, ${CONSENT}::uuid, ${HQ}::uuid, 'documento_presencial',
       ${tx.array([vec, vec, vec])}::text[], '{}'::jsonb, true, 0.97, ${MODEL}::uuid, null)`;
   });

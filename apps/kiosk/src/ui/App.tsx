@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import type { RosterEntry } from '@asistencia/core';
 import { KioskService, nextBackoffMs, type PunchResult } from '../domain/kiosk.ts';
+import type { OutKind } from '@asistencia/core';
 import type { DeviceState, LocalEventStatus } from '../domain/store.ts';
 import { simulatedIdentification } from '../infra/biometric/engine.ts';
 import { getEngine } from '../infra/biometric/index.ts';
@@ -15,9 +16,15 @@ import { Enrollment } from './Enrollment.tsx';
 type View =
   | { name: 'loading' } | { name: 'setup' } | { name: 'home' } | { name: 'capture' }
   | { name: 'result'; result: PunchResult } | { name: 'blocked' } | { name: 'bio_fail'; outcome: CaptureOutcome } | { name: 'test_picker' }
-  | { name: 'confirm'; employeeId: string; result: Extract<PunchResult, { kind: 'confirm_early_out' }> };
+  | { name: 'choose'; employeeId: string; result: Extract<PunchResult, { kind: 'choose_out' }> };
 
-const fmtTime = (ms: number, tz: string) => new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: tz }).format(new Date(ms));
+const fmtTime = (ms: number, tz: string) => new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', timeZone: tz }).format(new Date(ms));
+const fmtMin = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`);
+/** «Juan Esteban G.» → «Juan Esteban» (el saludo usa solo los nombres). */
+const firstNames = (displayName: string) => displayName.replace(/\s+\S\.?$/, '') || displayName;
+const welcome = (g: 'F' | 'M' | null) => (g === 'F' ? 'Bienvenida' : g === 'M' ? 'Bienvenido' : 'Bienvenido(a)');
+/** Indicadores que NO son anomalías (no se muestran como «hora en revisión»). */
+const NORMAL_FLAGS = new Set(['out_break', 'out_end', 'in_after_break', 'early_out_confirmed', 'long_session_out']);
 const REFUSED: Record<string, string> = {
   not_activated: 'Teléfono no activado.', blocked: 'Teléfono bloqueado por administración.',
   unknown_employee: 'Persona no autorizada en esta tienda.', lease_expired: 'Autorización caducada: el teléfono necesita sincronizar con internet.',
@@ -71,12 +78,15 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   // Tras la confirmación vuelve solo a la pantalla inicial limpia (la cámara se apaga al desmontarse).
   useEffect(() => {
     if (view.name !== 'result') return;
-    const t = setTimeout(() => setView({ name: 'home' }), (st?.policy.confirmationSec ?? 4) * 1000);
+    const r = view.result;
+    const base = (st?.policy.confirmationSec ?? 4) * 1000;
+    // El resumen del turno al salir necesita más tiempo de lectura.
+    const t = setTimeout(() => setView({ name: 'home' }), r.kind === 'recorded' && r.eventType === 'OUT' ? Math.max(base, 8000) : Math.max(base, 5000));
     return () => clearTimeout(t);
   }, [view, st]);
   useEffect(() => {
-    if (view.name !== 'confirm') return;
-    const t = setTimeout(() => setView({ name: 'home' }), 12_000); // sin respuesta: no se registra nada
+    if (view.name !== 'choose') return;
+    const t = setTimeout(() => setView({ name: 'home' }), 20_000); // sin respuesta: no se registra nada
     return () => clearTimeout(t);
   }, [view]);
   useEffect(() => {
@@ -86,27 +96,31 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   }, [view]);
 
   const lastId = useRef<import('../domain/kiosk.ts').Identification | null>(null);
-  const punchId = async (id: import('../domain/kiosk.ts').Identification, confirmEarlyOut = false) => {
+  const punchId = async (id: import('../domain/kiosk.ts').Identification, outKind?: OutKind) => {
     lastId.current = id;
-    const result = await svc.punch(id, { confirmEarlyOut });
-    if (result.kind === 'confirm_early_out') { setView({ name: 'confirm', employeeId: id.employeeId, result }); return; }
+    const result = await svc.punch(id, { outKind });
+    if (result.kind === 'choose_out') { setView({ name: 'choose', employeeId: id.employeeId, result }); return; }
     setView({ name: 'result', result });
     refresh();
     if (result.kind === 'recorded') runSync();
   };
   const onCapture = (o: CaptureOutcome) => {
-    if (o.kind === 'identified') { recordSuccess(); return punchId(o.id); }
+    const f2 = (x: number | null | undefined) => (x == null ? '-' : x.toFixed(2));
+    if (o.kind === 'identified') { recordSuccess(`m${f2(o.id.matchScore)},g${f2(o.id.matchMargin)},p${f2(o.id.padScore)}`); return punchId(o.id); }
     if (['not_recognized', 'ambiguous', 'liveness_failed', 'timeout'].includes(o.kind) && st) {
-      recordFailure(o.kind === 'liveness_failed' ? `pad_fail_${o.reason}` : o.kind, st.policy.maxFailedAttempts, st.policy.cooldownSec);
+      const detail = o.kind === 'not_recognized' ? `best${f2(o.bestScore)}/thr${f2(st.policy.matchThreshold)}`
+        : o.kind === 'liveness_failed' ? `${f2(o.score)}/${f2(o.threshold)}`
+        : o.kind === 'timeout' ? o.stage ?? '' : '';
+      recordFailure(o.kind === 'liveness_failed' ? `pad_fail_${o.reason}` : o.kind, st.policy.maxFailedAttempts, st.policy.cooldownSec, detail);
     }
     // Transición: si nadie de la tienda tiene plantillas del motor real (enrolamiento pendiente), se permite el modo prueba etiquetado.
     if (o.kind === 'no_templates') return setView({ name: 'test_picker' });
     setView({ name: 'bio_fail', outcome: o });
   };
-  const punch = async (employeeId: string, confirmEarlyOut = false) => {
-    if (confirmEarlyOut && lastId.current?.employeeId === employeeId) return punchId(lastId.current, true);
-    const result = await svc.punch(simulatedIdentification(employeeId), { confirmEarlyOut });
-    if (result.kind === 'confirm_early_out') { setView({ name: 'confirm', employeeId, result }); return; }
+  const punch = async (employeeId: string, outKind?: OutKind) => {
+    if (outKind && lastId.current?.employeeId === employeeId) return punchId(lastId.current, outKind);
+    const result = await svc.punch(simulatedIdentification(employeeId), { outKind });
+    if (result.kind === 'choose_out') { setView({ name: 'choose', employeeId, result }); return; }
     setView({ name: 'result', result });
     refresh();
     if (result.kind === 'recorded') runSync();
@@ -162,15 +176,16 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
       )}
       {view.name === 'bio_fail' && <BioFail o={view.outcome} onRetry={() => setView({ name: 'capture' })} onHome={() => setView({ name: 'home' })} />}
       {view.name === 'result' && <Result r={view.result} tz={st?.timezone ?? 'UTC'} />}
-      {view.name === 'confirm' && (
-        <div className="screen full warn" role="alertdialog" aria-live="assertive" aria-label="Confirmar salida">
-          <div style={{ fontSize: 28 }}>{view.result.displayName}</div>
-          <div className="big" style={{ fontSize: 34 }}>Entró hace {view.result.minutesSince < 1 ? 'menos de 1 minuto' : `${view.result.minutesSince} min`}</div>
-          <p style={{ fontSize: 22, margin: 0 }}>(a las {fmtTime(view.result.inAtMs, st?.timezone ?? 'UTC')})</p>
-          <p style={{ fontSize: 24 }}>¿Desea registrar su <b>SALIDA</b> ahora?</p>
-          <button className="btn" style={{ background: 'var(--out)', color: '#fff', fontSize: 26 }} onClick={() => punch(view.employeeId, true)}>Sí, registrar SALIDA</button>
-          <button className="btn" style={{ background: '#111', color: '#fff' }} onClick={() => setView({ name: 'home' })}>No, fue un error</button>
-          <p style={{ fontSize: 14 }}>Si no responde, no se registra nada.</p>
+      {view.name === 'choose' && (
+        <div className="screen full" role="alertdialog" aria-live="assertive" aria-label="Elegir tipo de salida" style={{ gap: 14 }}>
+          <div style={{ fontSize: 30, fontWeight: 700 }}>{firstNames(view.result.displayName)}</div>
+          <p style={{ fontSize: 20, margin: 0 }}>Entró a las {fmtTime(view.result.inAtMs, st?.timezone ?? 'UTC')} · hace {fmtMin(view.result.minutesSince)}</p>
+          {view.result.early && <p style={{ color: 'var(--warn)', fontSize: 18, margin: 0 }}>Entró hace muy poco. Si fue un error, toque «Cancelar».</p>}
+          <p style={{ fontSize: 24, margin: '6px 0' }}>¿Qué desea registrar?</p>
+          <button className="btn" style={{ background: '#f5a524', color: '#111', fontSize: 26, minHeight: 72 }} onClick={() => punch(view.employeeId, 'break')}>🍽 Salida a almuerzo</button>
+          <button className="btn" style={{ background: 'var(--out)', color: '#fff', fontSize: 26, minHeight: 72 }} onClick={() => punch(view.employeeId, 'end')}>🏁 Salida — fin de turno</button>
+          <button className="btn small" onClick={() => setView({ name: 'home' })}>Cancelar (no registrar nada)</button>
+          <p className="muted" style={{ fontSize: 14 }}>Si no elige nada en 20 s, no se registra.</p>
         </div>
       )}
       {footer}
@@ -258,15 +273,35 @@ function BioFail({ o, onRetry, onHome }: { o: CaptureOutcome; onRetry: () => voi
 }
 
 function Result({ r, tz }: { r: PunchResult; tz: string }) {
-  if (r.kind === 'confirm_early_out') return null; // se muestra en la pantalla de confirmación
+  if (r.kind === 'choose_out') return null; // se muestra en la pantalla de elección
   if (r.kind === 'recorded') {
+    const name = firstNames(r.displayName);
+    const anomalies = r.flags.filter((f) => !NORMAL_FLAGS.has(f));
+    let title: string, line: string, extra: string | null = null;
+    if (r.eventType === 'IN' && r.breakMinutes != null) {
+      title = `¡${welcome(r.gender)} de nuevo, ${name}!`;
+      line = `Regreso de almuerzo · ${fmtTime(r.at, tz)}`;
+      extra = `Almuerzo: ${fmtMin(r.breakMinutes)}`;
+    } else if (r.eventType === 'IN') {
+      title = `¡${welcome(r.gender)}, ${name}!`;
+      line = `Entrada registrada · ${fmtTime(r.at, tz)}`;
+    } else if (r.outKind === 'break') {
+      title = `¡Buen provecho, ${name}!`;
+      line = `Salida a almuerzo · ${fmtTime(r.at, tz)}`;
+      extra = 'Recuerde marcar al regresar.';
+    } else {
+      title = `¡Hasta pronto, ${name}!`;
+      line = `Fin de turno · ${fmtTime(r.at, tz)}`;
+      if (r.shift) extra = `Turno laborado: ${fmtMin(r.shift.workedMinutes)}` + (r.shift.breakMinutes ? ` · Almuerzo: ${fmtMin(r.shift.breakMinutes)}` : '')
+        + (r.shift.complete ? '' : ' (según las marcaciones de este teléfono)');
+    }
     return (
-      <div className={`screen full ${r.eventType === 'IN' ? 'ok-in' : 'ok-out'}`} role="status" aria-live="assertive">
-        <div className="big">{r.eventType === 'IN' ? 'ENTRADA REGISTRADA' : 'SALIDA REGISTRADA'}</div>
-        <div style={{ fontSize: 32 }}>{r.displayName}</div>
-        <div style={{ fontSize: 40, fontWeight: 700 }}>{fmtTime(r.at, tz)}</div>
-        <p>Guardado en el teléfono. Se enviará al servidor automáticamente.</p>
-        {r.flags.length > 0 && <p style={{ fontSize: 14 }}>Hora en revisión ({r.flags.join(', ')})</p>}
+      <div className={`screen full ${r.eventType === 'IN' ? 'ok-in' : 'ok-out'}`} role="status" aria-live="assertive" style={{ gap: 10 }}>
+        <div className="big" style={{ fontSize: 38 }}>{title}</div>
+        <div style={{ fontSize: 28, fontWeight: 700 }}>{line}</div>
+        {extra && <div style={{ fontSize: 24 }}>{extra}</div>}
+        <p style={{ fontSize: 15 }}>Guardado en el teléfono; se envía al servidor automáticamente.</p>
+        {anomalies.length > 0 && <p style={{ fontSize: 14 }}>Hora en revisión ({anomalies.join(', ')})</p>}
       </div>
     );
   }

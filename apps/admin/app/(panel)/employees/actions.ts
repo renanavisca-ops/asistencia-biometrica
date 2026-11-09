@@ -12,7 +12,7 @@ export type CreateEmployeeState = {
   created?: { id: string; code: string; name: string };
 };
 
-const FIELDS = ['first_name', 'last_name', 'document_type', 'document_country', 'document_number', 'hired_on', 'store_id'] as const;
+const FIELDS = ['first_name', 'last_name', 'gender', 'document_type', 'document_country', 'document_number', 'hired_on', 'store_id'] as const;
 
 /** Alta sin salir del listado: conserva lo escrito y señala el campo con error. */
 export async function createEmployee(_prev: CreateEmployeeState, fd: FormData): Promise<CreateEmployeeState> {
@@ -30,6 +30,8 @@ export async function createEmployee(_prev: CreateEmployeeState, fd: FormData): 
     return { status: 'error', message: msg, field, values };
   }
   const r = data as { id: string; employeeCode: string };
+  const gender = s(fd, 'gender');
+  if (gender === 'F' || gender === 'M') await sb.from('employees').update({ gender }).eq('id', r.id);
   revalidatePath('/employees');
   return { status: 'ok', created: { id: r.id, code: r.employeeCode, name: `${values.first_name} ${values.last_name}`.trim() },
     // Conserva tipo, país y sede para dar de alta al siguiente más rápido.
@@ -39,7 +41,9 @@ export async function createEmployee(_prev: CreateEmployeeState, fd: FormData): 
 export async function updateEmployee(fd: FormData) {
   const sb = await supabaseServer();
   const id = s(fd, 'id')!;
-  const { error } = await sb.from('employees').update({ first_name: s(fd, 'first_name'), last_name: s(fd, 'last_name'), hired_on: s(fd, 'hired_on') }).eq('id', id);
+  const g = s(fd, 'gender');
+  const { error } = await sb.from('employees').update({ first_name: s(fd, 'first_name'), last_name: s(fd, 'last_name'), hired_on: s(fd, 'hired_on'),
+    gender: g === 'F' || g === 'M' ? g : null }).eq('id', id);
   back(`/employees/${id}`, fd, error, 'Datos actualizados');
 }
 

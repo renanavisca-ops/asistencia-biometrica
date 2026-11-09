@@ -1,4 +1,4 @@
-import type { DecisionFlag, DevicePolicy, EventType, LastEventRef } from './types.ts';
+import type { DecisionFlag, DevicePolicy, EventType, LastEventRef, OutKind } from './types.ts';
 
 export type Decision =
   | {
@@ -9,10 +9,12 @@ export type Decision =
       previousSessionMissingOut: boolean;
     }
   | {
-      kind: 'confirm_early_out';
-      /** Sesión abierta hace menos de minSessionMinutes: la persona debe confirmar que quiere registrar SALIDA. */
+      kind: 'choose_out';
+      /** Sesión abierta: la persona elige en pantalla «Salida a almuerzo» o «Salida (fin de turno)» antes de registrar. */
       lastEvent: LastEventRef;
       minutesSince: number;
+      /** Entró hace menos de minSessionMinutes (aviso en pantalla: posible marcación por error). */
+      early: boolean;
     }
   | {
       kind: 'duplicate';
@@ -27,8 +29,8 @@ export interface DecisionInput {
   nowMonotonicMs: number | null;
   bootId: string | null;
   policy: Pick<DevicePolicy, 'antiDoubleWindowSec' | 'staleSessionHours' | 'longSessionHours'> & Partial<Pick<DevicePolicy, 'minSessionMinutes'>>;
-  /** La persona confirmó en pantalla una salida anticipada. */
-  confirmEarlyOut?: boolean;
+  /** Tipo de salida elegido en pantalla. Sin él, con sesión abierta se devuelve `choose_out`. */
+  outKind?: OutKind;
 }
 
 /**
@@ -54,9 +56,9 @@ export function elapsedSinceMs(input: DecisionInput): { ms: number; source: 'mon
  * Determina el siguiente evento de un empleado sin horarios configurados.
  *
  * - Sin sesión abierta → ENTRADA.
- * - Con sesión abierta → SALIDA.
+ * - Con sesión abierta → la persona elige SALIDA a almuerzo/pausa o SALIDA de fin de turno (`choose_out`).
  * - Reconocimiento repetido dentro de la ventana anti-doble → no se registra nada (idempotente).
- * - Con sesión abierta hace menos de minSessionMinutes → se pide confirmación antes de registrar SALIDA.
+ * - Fin de turno a menos de minSessionMinutes de la entrada → se registra con `early_out_confirmed` (lo eligió la persona).
  * - Sesión abierta más allá de `staleSessionHours` → ENTRADA nueva + incidencia de salida omitida. Se elige así
  *   porque, tras una ausencia larga, es más probable que la persona esté llegando; ambas cosas quedan en revisión.
  *   No se crea ningún evento de salida sintético.
@@ -78,6 +80,7 @@ export function decideNextEvent(input: DecisionInput): Decision {
   }
 
   if (last.eventType === 'OUT') {
+    if (last.outKind === 'break') flags.push('in_after_break');
     return { kind: 'record', eventType: 'IN', flags, previousSessionMissingOut: false };
   }
 
@@ -91,11 +94,10 @@ export function decideNextEvent(input: DecisionInput): Decision {
       previousSessionMissingOut: true,
     };
   }
-  const minSession = policy.minSessionMinutes ?? 0;
-  if (!regression && ms < minSession * 60_000) {
-    if (!input.confirmEarlyOut) return { kind: 'confirm_early_out', lastEvent: last, minutesSince: Math.floor(ms / 60_000) };
-    flags.push('early_out_confirmed');
-  }
+  const early = !regression && ms < (policy.minSessionMinutes ?? 0) * 60_000;
+  if (!input.outKind) return { kind: 'choose_out', lastEvent: last, minutesSince: Math.max(0, Math.floor(ms / 60_000)), early };
+  flags.push(input.outKind === 'break' ? 'out_break' : 'out_end');
+  if (early && input.outKind === 'end') flags.push('early_out_confirmed');
   if (!regression && hours >= policy.longSessionHours) flags.push('long_session_out');
   return { kind: 'record', eventType: 'OUT', flags, previousSessionMissingOut: false };
 }

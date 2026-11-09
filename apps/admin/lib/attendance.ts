@@ -13,7 +13,7 @@ export function defaultRange(sp: Record<string, string | undefined>) {
 export async function querySessions(sb: Ctx['supabase'], f: Filters, limit = 1000) {
   const end = new Date(f.to + 'T00:00:00Z'); end.setUTCDate(end.getUTCDate() + 1);
   let q = sb.from('attendance_sessions')
-    .select('id, state, opened_at, closed_at, duration_seconds, needs_review, cross_store, in_event_id, out_event_id, employee_id, employees(employee_code, first_name, last_name), stores(code, name, timezone)')
+    .select('id, state, opened_at, closed_at, duration_seconds, needs_review, cross_store, out_kind, in_event_id, out_event_id, employee_id, employees(employee_code, first_name, last_name), stores(code, name, timezone)')
     .eq('organization_id', f.org)
     .or(`and(opened_at.gte.${f.from}T00:00:00Z,opened_at.lt.${end.toISOString()}),and(opened_at.is.null,closed_at.gte.${f.from}T00:00:00Z,closed_at.lt.${end.toISOString()})`)
     .order('opened_at', { ascending: false, nullsFirst: false }).limit(limit);
@@ -35,7 +35,7 @@ export async function queryEvents(sb: Ctx['supabase'], f: Filters, limit = 5000)
 
 export type SessionRow = {
   id: string; state: 'open' | 'closed' | 'missing_out' | 'orphan_out'; opened_at: string | null; closed_at: string | null;
-  needs_review: boolean; employee_id: string;
+  needs_review: boolean; employee_id: string; out_kind: 'break' | 'end' | null;
   employees: { employee_code: string; first_name: string; last_name: string };
   stores: { code: string; name: string; timezone: string };
 };
@@ -58,7 +58,7 @@ export function workdaysFrom(rows: SessionRow[], pol: { pauseMinMinutes: number;
   for (const [tz, list] of byTz) {
     const days = summarizeWorkdays(list.map((r) => ({
       employeeId: r.employee_id, openedAtMs: r.opened_at ? Date.parse(r.opened_at) : null, closedAtMs: r.closed_at ? Date.parse(r.closed_at) : null,
-      state: r.state, needsReview: r.needs_review,
+      state: r.state, needsReview: r.needs_review, outKind: r.out_kind,
     })), { timeZone: tz, ...pol });
     for (const d of days) out.push({ ...d, employee: meta.get(d.employeeId)!.employees, store: meta.get(d.employeeId)!.stores });
   }

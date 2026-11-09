@@ -40,8 +40,10 @@ export interface SyncPushResponse {
 export interface RosterEntry {
   employeeId: string;
   displayName: string; // solo nombre para la confirmación en pantalla
+  /** Para el saludo (Bienvenido/Bienvenida). null = no indicado (saludo neutro). */
+  gender?: 'F' | 'M' | null;
   leaseExpiresAt: string;
-  lastEvent: { id: string; eventType: 'IN' | 'OUT'; occurredAt: string } | null;
+  lastEvent: { id: string; eventType: 'IN' | 'OUT'; occurredAt: string; outKind?: 'break' | 'end' | null } | null;
   templates: { templateId: string; modelVersion: string; dims: number; vectorB64: string }[];
 }
 

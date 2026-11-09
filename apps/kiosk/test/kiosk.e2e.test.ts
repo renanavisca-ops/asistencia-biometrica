@@ -71,6 +71,11 @@ d('kiosk ↔ device-api ↔ Postgres', () => {
     `);
     // Enrolamiento central (sede HQ) de ambos empleados.
     const vec = Buffer.from(new Float32Array([0.5, 0.5, 0.5, 0.5]).buffer).toString('base64');
+    // Teléfono de la sede central con permiso de enrolamiento (marcado en el panel).
+    const DEVHQ = '99999999-0000-4000-8000-0000000000e1';
+    await sql.unsafe(`insert into public.devices (id, organization_id, store_id, label, status, can_enroll, activated_at) values ('${DEVHQ}', '${ORG}', '${HQ}', 'Tel HQ', 'active', true, now())`);
+    const [{ t: ticket }] = await sql`select private.issue_enroll_ticket(${DEVHQ}::uuid) as t`;
+    await asAdmin((tx) => tx`select public.bind_enroll_ticket(${ticket})`);
     for (const e of [ANA, LUIS]) {
       await asAdmin(async (tx) => {
         const [c] = await tx`insert into public.biometric_consents (organization_id, employee_id, legal_basis, notice_version, accepted_at, recorded_by)

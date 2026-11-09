@@ -2,6 +2,7 @@ import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
 import { fmtDateTime } from '@/lib/format';
 import { grant, revoke } from './actions';
+import { InviteForm } from './InviteForm';
 
 const ROLE: Record<string, string> = { superadmin: 'Superadministrador', central_admin: 'Administrador central', supervisor: 'Supervisor', auditor: 'Auditor (solo lectura)' };
 
@@ -10,11 +11,10 @@ export default async function Admins({ searchParams }: { searchParams: SP }) {
   const { supabase, org, orgWide, isSuper, user } = await getContext(sp.org);
   if (!org) return <p>Sin organización.</p>;
   if (!orgWide('admin.manage')) return <p>Sin permiso para gestionar administradores.</p>;
-  const [{ data: grants }, { data: admins }, { data: stores }, { data: regions }] = await Promise.all([
+  const [{ data: grants }, { data: admins }, { data: orgs }] = await Promise.all([
     supabase.from('admin_role_grants').select('*, admins(display_name, email), stores(code, name), regions(name)').or(`organization_id.eq.${org.id},role.eq.superadmin`).is('revoked_at', null).order('granted_at'),
     supabase.from('admins').select('user_id, display_name, email').order('display_name'),
-    supabase.from('stores').select('id, code, name').eq('organization_id', org.id).order('code'),
-    supabase.from('regions').select('id, name').eq('organization_id', org.id),
+    isSuper ? supabase.from('organizations').select('id, name').order('name') : Promise.resolve({ data: [{ id: org.id, name: org.name }] }),
   ]);
   return (
     <>
@@ -33,17 +33,17 @@ export default async function Admins({ searchParams }: { searchParams: SP }) {
           );
         })}
       </tbody></table>
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3>Asignar rol</h3>
-        <p className="muted">La persona debe tener ya una cuenta de administrador. Las invitaciones por correo aún no están implementadas: un superadministrador da de alta la cuenta (ver docs/DEPLOYMENT.md).</p>
-        <form action={grant} className="inline"><OrgField org={org.id} />
+      <InviteForm orgs={(orgs ?? []) as { id: string; name: string }[]} defaultOrg={org.id} isSuper={isSuper} />
+      <details className="card" style={{ marginTop: 16 }}>
+        <summary>Asignar rol a una cuenta existente</summary>
+        <form action={grant} className="inline" style={{ marginTop: 8 }}><OrgField org={org.id} />
           <label>Persona<select name="user_id" required>{(admins ?? []).filter((a) => a.user_id !== user.id).map((a) => <option key={a.user_id} value={a.user_id}>{a.display_name} ({a.email})</option>)}</select></label>
-          <label>Rol<select name="role">{Object.entries(ROLE).filter(([k]) => k !== 'superadmin' || isSuper).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label>Ámbito (supervisor/auditor)<select name="scope"><option value="">Toda la organización</option>
-            {(regions ?? []).map((r) => <option key={r.id} value={`r:${r.id}`}>Región {r.name}</option>)}
-            {(stores ?? []).map((s) => <option key={s.id} value={`s:${s.id}`}>Sede {s.code} · {s.name}</option>)}</select></label>
+          <label>Rol<select name="role">
+            <option value="central_admin">Administrador central</option>
+            {isSuper && <option value="superadmin">Superadministrador</option>}
+          </select></label>
           <button>Asignar</button></form>
-      </div>
+      </details>
     </>
   );
 }

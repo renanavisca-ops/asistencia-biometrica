@@ -16,6 +16,7 @@ function assert(c: unknown, m: string) { if (!c) throw new Error('FALLO: ' + m);
 const ORG = '11111111-0000-4000-8000-000000000000', REG = '11111111-0000-4000-8000-000000000001';
 const HQ = '11111111-0000-4000-8000-000000000002', STORE = '11111111-0000-4000-8000-000000000003';
 const EMP = '11111111-0000-4000-8000-000000000004', DEV = '11111111-0000-4000-8000-000000000005';
+const DEV_HQ = '11111111-0000-4000-8000-0000000000e1'; // teléfono de la sede central con permiso de enrolamiento
 const ADMIN = '11111111-0000-4000-8000-000000000006', MODEL = '11111111-0000-4000-8000-000000000007';
 const CONSENT = '11111111-0000-4000-8000-000000000008';
 const CODE = 'ABCD-EFGH-JKMN';
@@ -36,13 +37,16 @@ async function seed() {
     insert into public.biometric_consents (id, organization_id, employee_id, legal_basis, notice_version, accepted_at, recorded_by)
       values ('${CONSENT}', '${ORG}', '${EMP}', 'consentimiento_expreso', 'v1', now(), '${ADMIN}');
     insert into public.devices (id, organization_id, store_id, label) values ('${DEV}', '${ORG}', '${STORE}', 'Teléfono S1');
+    insert into public.devices (id, organization_id, store_id, label, status, can_enroll, activated_at) values ('${DEV_HQ}', '${ORG}', '${HQ}', 'Teléfono HQ', 'active', true, now());
     insert into public.device_enrollments (organization_id, device_id, code_hash, expires_at)
       values ('${ORG}', '${DEV}', encode(extensions.digest('ABCDEFGHJKMN', 'sha256'), 'hex'), now() + interval '30 minutes');
   `);
   const vec = b64urlEncode(new Uint8Array(new Float32Array([0.5, 0.5, 0.5, 0.5]).buffer));
+  const [{ t: ticket }] = await sql`select private.issue_enroll_ticket(${DEV_HQ}::uuid) as t`;
   await sql.begin(async (tx) => {
     await tx.unsafe(`set local role authenticated`);
     await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ADMIN, aal: 'aal2' })}, true)`;
+    await tx`select public.bind_enroll_ticket(${ticket})`;
     await tx`select public.set_employee_document(${EMP}::uuid, 'DPI', 'GT', '1234567890123', 'prueba automatizada')`;
     await tx`select public.verify_employee_document(${EMP}::uuid, '1234567890123')`;
     await tx`select public.enroll_biometric(${EMP}::uuid, ${CONSENT}::uuid, ${HQ}::uuid, 'documento_presencial',
@@ -50,7 +54,7 @@ async function seed() {
   });
 }
 
-async function signedCall(route: 'push' | 'pull', body: unknown, privateKey: string, deviceId = DEV) {
+async function signedCall(route: 'push' | 'pull' | 'enroll-ticket', body: unknown, privateKey: string, deviceId = DEV) {
   const ch = await (await call('challenge', { deviceId })).json();
   const text = JSON.stringify(body);
   const sig = signRequest('POST', route, ch.challenge, text, privateKey);
@@ -72,6 +76,17 @@ Deno.test('flujo completo del dispositivo', async (t) => {
     const r = await call('activate', { code: CODE, publicKey: kp.publicKey, platform: 'android', proof: proof(CODE), osVersion: '14', appVersion: '0.1.0', hardwareModel: 'Pixel', keyStorage: 'android_keystore' });
     const j = await r.json();
     assert(r.status === 200 && j.ok && j.deviceId === DEV && j.nextDeviceSeq === 1, 'activación ' + JSON.stringify(j));
+  });
+  await t.step('teléfono de tienda sin permiso no obtiene autorización de enrolamiento', async () => {
+    const { res } = await signedCall('enroll-ticket', {}, kp.privateKey);
+    assert(res.status === 403 && (await res.json()).error === 'enroll_not_allowed', 'enroll-ticket sin permiso');
+  });
+  await t.step('con permiso marcado en el panel sí la obtiene (firmada por el teléfono)', async () => {
+    await sql`update public.devices set can_enroll = true where id = ${DEV}`;
+    const { res } = await signedCall('enroll-ticket', {}, kp.privateKey);
+    const j = await res.json();
+    assert(res.status === 200 && typeof j.ticket === 'string' && j.ticket.length === 48, 'enroll-ticket ' + JSON.stringify(j));
+    await sql`update public.devices set can_enroll = false where id = ${DEV}`;
   });
   await t.step('pull devuelve roster con plantilla y sin política calibrada', async () => {
     const { res } = await signedCall('pull', { protocol: PROTOCOL_VERSION, knownEmployeeIds: [] }, kp.privateKey);

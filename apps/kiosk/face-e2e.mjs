@@ -33,6 +33,14 @@ await sql.unsafe(`
   insert into public.device_enrollments (organization_id, device_id, code_hash, expires_at) values ('${ORG}', '${DEV}', encode(extensions.digest('FACE2345FACE', 'sha256'), 'hex'), now() + interval '1 hour');
 `);
 // NEGATIVE=1: solo se enrola a Beta; la cámara muestra a Alfa (no enrolada) → debe rechazarse.
+const DEVHQ = '99999999-0000-4000-8000-0000000000e1'; // teléfono de la sede central con permiso de enrolamiento
+await sql.unsafe(`insert into public.devices (id, organization_id, store_id, label, status, can_enroll, activated_at) values ('${DEVHQ}', '${ORG}', '${HQ}', 'Tel HQ', 'active', true, now())`);
+const [{ t: enrollTicket }] = await sql`select private.issue_enroll_ticket(${DEVHQ}::uuid) as t`;
+await sql.begin(async (tx) => {
+  await tx.unsafe('set local role authenticated');
+  await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ADMIN, aal: 'aal2' })}, true)`;
+  await tx`select public.bind_enroll_ticket(${enrollTicket})`;
+});
 for (const [emp, key] of process.env.NEGATIVE ? [[B, 'b']] : [[A, 'a'], [B, 'b']]) {
   await sql.begin(async (tx) => {
     await tx.unsafe('set local role authenticated');

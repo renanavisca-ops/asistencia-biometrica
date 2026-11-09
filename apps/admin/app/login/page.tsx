@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
@@ -10,6 +10,10 @@ export default function Login() {
   const [msg, setMsg] = useState<{ kind: 'error' | 'ok'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const allowSignup = process.env.NEXT_PUBLIC_ALLOW_SIGNUP === 'true';
+  // Si el enlace de invitación cae aquí (dirección de retorno no permitida en Supabase), se reenvía a la página de aceptación.
+  useEffect(() => {
+    if (/(^|&)type=(invite|recovery)(&|$)/.test(location.hash.slice(1)) || /access_token=/.test(location.hash)) location.replace('/auth/accept' + location.hash);
+  }, []);
 
   async function signIn(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMsg(null);

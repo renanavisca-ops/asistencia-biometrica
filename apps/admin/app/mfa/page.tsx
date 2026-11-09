@@ -54,7 +54,7 @@ export default function Mfa() {
         <form onSubmit={verify} className="inline">
           <label>Código<input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value)} /></label>
           <button disabled={!factorId}>Verificar</button>
-          <button type="button" className="secondary" onClick={async () => { await sb.auth.signOut(); router.replace('/login'); }}>Salir</button>
+          <button type="button" className="secondary" onClick={async () => { await sb.auth.signOut({ scope: 'local' }); router.replace('/login'); }}>Salir</button>
         </form>
       </div>
     </main>

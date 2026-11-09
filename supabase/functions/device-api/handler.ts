@@ -20,7 +20,7 @@ export const activationProofBytes = (code: string, publicKey: string) =>
 /**
  * API de dispositivos de tienda. Los dispositivos no tienen usuario de Supabase: se autentican con su clave Ed25519
  * (generada en el teléfono durante la activación) firmando un desafío de un solo uso emitido por el servidor.
- * Rutas: POST /device-api/{activate|challenge|push|pull}
+ * Rutas: POST /device-api/{activate|challenge|push|pull|enroll-ticket}
  */
 export function createHandler(db: DeviceDb, log: (msg: string, extra?: unknown) => void = () => {}) {
   async function authenticate(req: Request, route: string, body: string): Promise<string | null> {
@@ -89,6 +89,14 @@ export function createHandler(db: DeviceDb, log: (msg: string, extra?: unknown) 
           if (b.protocol !== PROTOCOL_VERSION) return json(400, { error: 'unsupported_protocol' });
           const known: string[] = Array.isArray(b.knownEmployeeIds) ? b.knownEmployeeIds.filter(isUuid).slice(0, 10_000) : [];
           return json(200, await db.pull(deviceId, known));
+        }
+        case 'enroll-ticket': {
+          // El teléfono (firmado con su clave) pide autorización para el modo enrolamiento; solo si en el panel tiene permiso.
+          const auth = await authenticate(req, 'enroll-ticket', body);
+          if (!auth) return json(401, { error: 'unauthorized' });
+          const [deviceId] = auth.split('|') as [string, string];
+          const ticket = await db.enrollTicket(deviceId);
+          return ticket ? json(200, { ticket, expiresInSec: 900 }) : json(403, { error: 'enroll_not_allowed' });
         }
         default:
           return json(404, { error: 'not_found' });

@@ -16,20 +16,40 @@ const b64 = (v: Float32Array) => { let s = ''; for (const b of new Uint8Array(v.
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Modo enrolamiento (administrador): registro facial en la sede central de la organización del teléfono. Requiere internet. */
-export function Enrollment({ organizationId, onClose }: { organizationId: string; onClose: () => void }) {
+export function Enrollment({ organizationId, onClose, getTicket }: {
+  organizationId: string; onClose: () => void;
+  /** Autorización del teléfono (firmada con su clave); el servidor la exige para enrolar. */
+  getTicket: () => Promise<{ ok: true; ticket: string } | { ok: false; error: string }>;
+}) {
   const sb = useRef<SupabaseClient>(createAdminClient());
   const [step, setStep] = useState<Step>({ s: 'login' });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const close = async () => { await sb.current.auth.signOut().catch(() => {}); onClose(); };
+  const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  /** Tras iniciar sesión con MFA: liga la autorización del teléfono a la sesión del administrador. */
+  const authorize = async () => {
+    setErr(null);
+    const t = await getTicket();
+    if (!t.ok) {
+      return setErr(t.error === 'enroll_not_allowed'
+        ? 'Este teléfono no tiene permiso para enrolar. Actívelo en el panel: Teléfonos → «Puede enrolar».'
+        : 'No se pudo obtener la autorización del teléfono (' + t.error + '). Revise la conexión.');
+    }
+    const { data, error } = await sb.current.rpc('bind_enroll_ticket', { p_ticket: t.ticket });
+    if (error) return setErr(error.message);
+    setDeviceLabel(String(data ?? ''));
+    setStep({ s: 'list' });
+  };
+  const close = async () => { await sb.current.auth.signOut({ scope: 'local' }).catch(() => {}); onClose(); };
 
   return (
     <div className="overlay" style={{ justifyContent: 'flex-start', paddingTop: 40, overflowY: 'auto', textAlign: 'center' }}>
       <h1>Enrolamiento facial</h1>
       <p className="muted" style={{ fontSize: 13, margin: 0 }}>Solo administradores. Motor EXPERIMENTAL (sface@2021dec + MiniFASNet). Requiere internet.</p>
       {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
-      {step.s === 'login' && <Login sb={sb.current} busy={busy} setBusy={setBusy} setErr={setErr} onOk={(factorId) => setStep(factorId ? { s: 'mfa', factorId } : { s: 'list' })} />}
-      {step.s === 'mfa' && <Mfa sb={sb.current} factorId={step.factorId} setErr={setErr} onOk={() => setStep({ s: 'list' })} />}
+      {step.s === 'login' && <Login sb={sb.current} busy={busy} setBusy={setBusy} setErr={setErr} onOk={(factorId) => (factorId ? setStep({ s: 'mfa', factorId }) : void authorize())} />}
+      {step.s === 'mfa' && <Mfa sb={sb.current} factorId={step.factorId} setErr={setErr} onOk={() => void authorize()} />}
+      {deviceLabel && step.s !== 'login' && step.s !== 'mfa' && <p className="muted" style={{ fontSize: 13, margin: 0 }}>Teléfono autorizado: {deviceLabel}</p>}
       {step.s === 'list' && <EmployeeList sb={sb.current} org={organizationId} setErr={setErr} onPick={(emp) => setStep({ s: 'prepare', emp })} />}
       {step.s === 'prepare' && <Prepare sb={sb.current} org={organizationId} emp={step.emp} setErr={setErr} onBack={() => setStep({ s: 'list' })}
         onReady={(consentId, identity) => setStep({ s: 'capture', emp: step.emp, consentId, identity })} />}

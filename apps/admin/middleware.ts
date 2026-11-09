@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC = ['/login'];
+const PUBLIC = ['/login', '/auth/accept'];
 
 export async function middleware(req: NextRequest) {
   let res = NextResponse.next({ request: req });
@@ -23,6 +23,7 @@ export async function middleware(req: NextRequest) {
   }
   // MFA obligatorio: sin aal2 solo se permite la pantalla de MFA (las políticas RLS también lo exigen).
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (path === '/auth/accept') return res; // crear contraseña antes de configurar el autenticador
   if (aal?.currentLevel !== 'aal2' && path !== '/mfa') return NextResponse.redirect(new URL('/mfa', req.url));
   if (aal?.currentLevel === 'aal2' && (path === '/mfa' || path === '/login')) return NextResponse.redirect(new URL('/', req.url));
   return res;

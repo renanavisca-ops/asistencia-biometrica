@@ -10,6 +10,8 @@ export interface DeviceDb {
   ingest(deviceId: string, batchId: string, events: unknown[], invalidIds: string[]): Promise<unknown[]>;
   recordHealth(deviceId: string, health: unknown): Promise<void>;
   pull(deviceId: string, knownEmployeeIds: string[]): Promise<Record<string, unknown>>;
+  /** Autorización de un solo uso para el modo enrolamiento (null si el teléfono no tiene permiso). */
+  enrollTicket(deviceId: string): Promise<string | null>;
   close(): Promise<void>;
 }
 
@@ -41,6 +43,10 @@ export function createDb(url: string): DeviceDb {
     async pull(id, known) {
       const [r] = await sql`select private.device_pull(${id}::uuid, ${sql.array(known)}::uuid[]) as r`;
       return r!.r;
+    },
+    async enrollTicket(id) {
+      const [r] = await sql`select private.issue_enroll_ticket(${id}::uuid) as t`;
+      return r!.t ?? null;
     },
     async close() {
       await sql.end();

@@ -201,7 +201,7 @@ export class KioskService {
       await this.store.replaceRoster(pull.roster as RosterEntry[]);
       await this.store.saveState({
         ...st, policy: normalizePolicy(pull.policy), rosterVersion: pull.rosterVersion, storeId: pull.device.storeId,
-        storeName: pull.device.storeName, timezone: pull.device.timezone, lastSyncAt: pull.serverTime,
+        storeName: pull.device.storeName, timezone: pull.device.timezone, lastSyncAt: pull.serverTime, canEnroll: pull.device.canEnroll === true,
       });
       return { ok: true, pushed, acks: acc, rosterSize: pull.roster.length, revoked: pull.revokedEmployeeIds.length, deviceStatus: 'active' };
     } catch (e) {
@@ -223,6 +223,23 @@ export class KioskService {
     const next = { ...st, serverTimeRef: ref };
     await this.store.saveState(next);
     return next;
+  }
+
+  /** Pide al servidor (firmado con la clave del teléfono) la autorización para el modo enrolamiento. */
+  async enrollTicket(): Promise<{ ok: true; ticket: string } | { ok: false; error: string }> {
+    const st = await this.store.getState();
+    if (!st || st.status !== 'active') return { ok: false, error: 'not_activated' };
+    try {
+      const r = await this.api.enrollTicket(st.deviceId, st.privateKey);
+      if (st.canEnroll !== true) await this.store.saveState({ ...st, canEnroll: true });
+      return { ok: true, ticket: r.ticket };
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'enroll_not_allowed') {
+        await this.store.saveState({ ...st, canEnroll: false });
+        return { ok: false, error: 'enroll_not_allowed' };
+      }
+      return { ok: false, error: e instanceof ApiError ? e.code : 'network_error' };
+    }
   }
 
   async status() {

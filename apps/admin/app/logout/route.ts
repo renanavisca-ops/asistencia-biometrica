@@ -3,6 +3,6 @@ import { supabaseServer } from '@/lib/supabase/server';
 
 export async function POST(req: Request) {
   const sb = await supabaseServer();
-  await sb.auth.signOut();
+  await sb.auth.signOut({ scope: 'local' });
   return NextResponse.redirect(new URL('/login', req.url), 303);
 }

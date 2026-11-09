@@ -17,6 +17,8 @@ export interface DeviceState {
   serverTimeRef: ServerTimeRef | null;
   rosterVersion: string | null;
   lastSyncAt: string | null; // última sincronización COMPLETA (push + pull) confirmada por el servidor
+  /** Permiso de enrolamiento marcado en el panel (informativo; el servidor lo exige en cada enrolamiento). */
+  canEnroll?: boolean;
   activatedAt: string;
 }
 

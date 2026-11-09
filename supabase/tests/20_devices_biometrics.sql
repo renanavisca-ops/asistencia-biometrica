@@ -26,7 +26,21 @@ reset role;
 select test.as_user('00000000-0000-4000-8000-00000000000c');
 select test.ok(test.raises($$select public.enroll_biometric('a3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000009','documento',array['AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA'],'{}',true,0.9,'c0000000-0000-4000-8000-000000000001',null)$$), 'supervisor no puede enrolar');
 select test.reset();
+-- Teléfono de enrolamiento: sin permiso no obtiene autorización; con permiso, el administrador la liga a su sesión.
+insert into public.devices (id, organization_id, store_id, label, status, activated_at)
+values ('d0000000-0000-4000-8000-0000000000e1', 'a0000000-0000-4000-8000-000000000000', 'a2000000-0000-4000-8000-000000000009', 'Tel enrolamiento', 'active', now());
+select test.ok(private.issue_enroll_ticket('d0000000-0000-4000-8000-0000000000e1') is null, 'teléfono sin permiso de enrolamiento → sin autorización');
+select test.as_user('00000000-0000-4000-8000-00000000000c');
+select test.ok(test.raises($$select public.set_device_can_enroll('d0000000-0000-4000-8000-0000000000e1', true)$$), 'supervisor no puede dar permiso de enrolamiento');
+select test.reset();
 select test.as_user('00000000-0000-4000-8000-00000000000b');
+select public.set_device_can_enroll('d0000000-0000-4000-8000-0000000000e1', true);
+select test.reset();
+select private.issue_enroll_ticket('d0000000-0000-4000-8000-0000000000e1') as tk1 \gset
+select test.as_user('00000000-0000-4000-8000-00000000000b');
+select test.ok(test.raises($$select public.bind_enroll_ticket('ticket-falso')$$), 'autorización falsa rechazada');
+select test.ok(public.bind_enroll_ticket(:'tk1') = 'Tel enrolamiento', 'administrador liga la autorización del teléfono a su sesión');
+select test.ok(test.raises(format('select public.bind_enroll_ticket(%L)', :'tk1')), 'autorización de un solo uso');
 select test.ok(test.raises($$select public.enroll_biometric('a3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000001','documento',array['AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA'],'{}',true,0.9,'c0000000-0000-4000-8000-000000000001',null)$$), 'no se enrola en una tienda (solo sede central)');
 select test.ok(test.raises($$select public.enroll_biometric('a3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000009','documento',array['AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA'],'{}',false,0.1,'c0000000-0000-4000-8000-000000000001',null)$$), 'sin prueba de vida superada no hay enrolamiento');
 select test.ok(test.raises($$select public.enroll_biometric('a3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000009','documento',array['AACAPwAAAAAAAAAA'],'{}',true,0.9,'c0000000-0000-4000-8000-000000000001',null)$$), 'mínimo 3 muestras');

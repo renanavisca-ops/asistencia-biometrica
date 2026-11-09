@@ -22,3 +22,11 @@ export async function issueCode(_prev: { code?: string; error?: string } | null,
   const { data, error } = await sb.rpc('issue_device_activation_code', { p_device_id: s(fd, 'id'), p_ttl_minutes: 30 });
   return error ? { error: humanError(error) } : { code: data as string };
 }
+
+/** Permiso de enrolamiento del teléfono (revocable: al quitarlo, el servidor invalida al instante las sesiones de enrolamiento). */
+export async function setCanEnroll(fd: FormData) {
+  const sb = await supabaseServer();
+  const allowed = s(fd, 'allowed') === '1';
+  const { error } = await sb.rpc('set_device_can_enroll', { p_device_id: s(fd, 'id'), p_allowed: allowed });
+  back('/devices', fd, error, allowed ? 'Permiso de enrolamiento activado (el teléfono lo verá al sincronizar)' : 'Permiso de enrolamiento retirado');
+}

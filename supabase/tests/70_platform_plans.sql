@@ -128,6 +128,8 @@ select test.ok(not (public.complete_signup() ->> 'created')::boolean, 'no se dup
 select test.reset();
 select test.ok((select o.country_code || '|' || o.created_via || '|' || o.terms_version || '|' || r.timezone from public.organizations o join public.regions r on r.organization_id = o.id
                 where o.name = 'Ferretería Nueva') = 'HN|app_signup|v1|America/Tegucigalpa', 'país, términos aceptados y región con su zona horaria');
+select test.ok((select (p.policy ->> 'matchThreshold')::numeric from public.device_policy_versions p join public.organizations o on o.id = p.organization_id
+                where o.name = 'Ferretería Nueva') = 0.4, 'nace con la política inicial (umbrales provisionales): la app no queda «sin calibrar»');
 select test.ok(exists (select 1 from public.admin_role_grants g join public.organizations o on o.id = g.organization_id
                        where g.user_id = '00000000-0000-4000-8000-0000000000f7' and g.role = 'central_admin' and o.name = 'Ferretería Nueva'), 'la persona queda como administradora central');
 

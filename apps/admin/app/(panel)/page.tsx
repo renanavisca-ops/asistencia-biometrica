@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getContext } from '@/lib/context';
 import { ago } from '@/lib/format';
 import type { SP } from '@/components/Flash';
+import { PresenceNow } from '@/components/PresenceNow';
 
 export default async function Home({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
@@ -32,8 +33,8 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
     <>
       <h2>{org.name}</h2>
       <div className="notice">
-        <b>Biometría NO IMPLEMENTADA.</b> El reconocimiento facial y la prueba de vida aún no están integrados ni validados;
-        el sistema no es apto para uso productivo. Ver docs/BIOMETRICS.md.
+        <b>Reconocimiento facial EXPERIMENTAL</b> (motor gratuito SFace + prueba de vida MiniFASNet y desafío activo). Umbrales provisionales,
+        sin calibración con voluntarios: no apto todavía para uso productivo. Ver docs/PRUEBAS_RECONOCIMIENTO.md.
       </div>
       <div className="grid">
         <div className="card kpi"><b>{emp.count ?? 0}</b><span>Empleados activos</span></div>
@@ -43,6 +44,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         <div className="card kpi"><Link href={`/incidents${q}`}><b>{inc.count ?? 0}</b></Link><span>Incidencias abiertas</span></div>
         <div className="card kpi"><b>{review.count ?? 0}</b><span>Eventos en revisión</span></div>
       </div>
+      <PresenceNow sb={supabase} org={org.id} />
       <h3>Teléfonos sin sincronizar en 24 h</h3>
       {staleDev.data?.length ? (
         <table><thead><tr><th>Teléfono</th><th>Sede</th><th>Última sincronización</th></tr></thead><tbody>

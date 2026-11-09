@@ -2,6 +2,7 @@ import { getContext } from '@/lib/context';
 import { OrgField, type SP } from '@/components/Flash';
 import { defaultRange, orgPolicy, querySessions, workdaysFrom, type SessionRow } from '@/lib/attendance';
 import { fmtDateTime, fmtDuration, STATE_LABEL } from '@/lib/format';
+import { PresenceNow } from '@/components/PresenceNow';
 
 export default async function Attendance({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
@@ -36,6 +37,8 @@ export default async function Attendance({ searchParams }: { searchParams: SP })
         <a href={`/api/export?type=events&${qs}`}>Exportar eventos (CSV)</a>
       </form>
       {error && <div className="msg error">{error.message}</div>}
+      <PresenceNow sb={supabase} org={org.id} store={f.store} />
+      <h3>Historial</h3>
       <p>
         {view === 'days' ? <b>Resumen por jornada</b> : <a href={`/attendance?${qs}&view=days`}>Resumen por jornada</a>}
         {' · '}

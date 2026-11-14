@@ -60,6 +60,8 @@ export interface LocalStore {
   counts(): Promise<Record<LocalEventStatus, number>>;
   /** Borra roster y plantillas (dispositivo bloqueado). Conserva la cola de eventos para auditoría. */
   wipeRoster(): Promise<void>;
+  /** Deja el teléfono como recién instalado (para reactivarlo con un código nuevo). */
+  resetDevice(): Promise<void>;
 }
 
 export class MemoryStore implements LocalStore {
@@ -107,4 +109,5 @@ export class MemoryStore implements LocalStore {
     return c;
   }
   async wipeRoster() { this.roster = []; }
+  async resetDevice() { this.state = null; this.roster = []; this.events = []; this.batch = null; }
 }

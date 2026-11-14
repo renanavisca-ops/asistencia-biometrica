@@ -58,6 +58,11 @@ export class SqliteStore implements LocalStore {
     ], true);
   }
   async wipeRoster() { await this.db.run('delete from roster'); }
+  async resetDevice() {
+    await this.db.run('delete from roster');
+    await this.db.run('delete from events');
+    await this.db.run('delete from kv');
+  }
 
   /** Atómico: evento + siguiente secuencia en la misma transacción. */
   async appendEvent(e: LocalEvent, nextSeq: number) {

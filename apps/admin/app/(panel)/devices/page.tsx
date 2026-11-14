@@ -47,12 +47,17 @@ export default async function Devices({ searchParams }: { searchParams: SP }) {
               <td className="mono">app {d.app_version ?? '—'}<br />rec {h?.recognition_model ?? '—'}<br />pad {h?.pad_model ?? '—'}</td>
               <td>{manage && (
                 <div style={{ display: 'grid', gap: 6 }}>
-                  {d.status !== 'retired' && d.status !== 'blocked' && <IssueCode deviceId={d.id} label={d.label} />}
-                  {d.status !== 'retired' && (
-                    <form action={setDeviceStatus} className="inline"><OrgField org={org.id} /><input type="hidden" name="id" value={d.id} />
-                      <select name="status" defaultValue="blocked" style={{ minWidth: 100 }}><option value="blocked">Bloquear</option><option value="retired">Retirar</option></select>
-                      <input name="reason" placeholder="motivo" required minLength={5} style={{ minWidth: 100 }} />
-                      <button className="danger">Aplicar</button></form>
+                  {d.status !== 'retired' && <IssueCode deviceId={d.id} label={d.label} status={d.status} />}
+                  {d.status !== 'retired' && d.status !== 'blocked' && (
+                    <details>
+                      <summary style={{ color: 'var(--danger)', cursor: 'pointer' }}>Bloquear o retirar…</summary>
+                      <p className="muted" style={{ fontSize: 12, margin: '6px 0' }}>Bloquear: el teléfono deja de marcar y borra sus datos de empleados (por pérdida o robo); se puede reactivar con un código.
+                        Retirar: definitivo. Para dar o quitar el permiso de enrolar use la columna «Puede enrolar».</p>
+                      <form action={setDeviceStatus} className="inline"><OrgField org={org.id} /><input type="hidden" name="id" value={d.id} />
+                        <select name="status" defaultValue="blocked" style={{ minWidth: 100 }}><option value="blocked">Bloquear</option><option value="retired">Retirar</option></select>
+                        <input name="reason" placeholder="motivo (p. ej. extraviado)" required minLength={5} style={{ minWidth: 100 }} />
+                        <button className="danger">Confirmar</button></form>
+                    </details>
                   )}
                 </div>
               )}</td>

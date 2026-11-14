@@ -24,4 +24,10 @@ select test.ok(private.register_invited_admin('00000000-0000-4000-8000-000000000
 reset role;
 select test.ok((select email from public.admins where user_id = '00000000-0000-4000-8000-0000000000f1') = 'nuevo@x', 'correo normalizado');
 select test.ok(exists (select 1 from public.audit_log where action = 'invite_admin'), 'invitación auditada');
+-- Reactivar un teléfono bloqueado (p. ej. bloqueado por error) con un código nuevo.
+select test.as_user('00000000-0000-4000-8000-00000000000b');
+select test.ok(public.issue_device_activation_code('d0000000-0000-4000-8000-000000000004') ~ '^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$', 'se puede emitir un código para un teléfono bloqueado');
+select test.reset();
+select test.ok((select status from public.devices where id = 'd0000000-0000-4000-8000-000000000004') = 'pending', 'queda pendiente hasta activarlo con el código nuevo');
+select test.ok(private.issue_challenge('d0000000-0000-4000-8000-000000000004') is null, 'mientras tanto sigue sin poder sincronizar (credencial anterior revocada)');
 \echo 'Pruebas de permiso de enrolamiento e invitaciones superadas'

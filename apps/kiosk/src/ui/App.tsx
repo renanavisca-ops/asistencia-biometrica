@@ -145,7 +145,21 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
       {view.name === 'loading' && <div className="screen muted">Cargando…</div>}
       {view.name === 'setup' && <Setup svc={svc} onDone={async () => { await refresh(); setView({ name: 'home' }); runSync(); }} />}
       {view.name === 'blocked' && (
-        <div className="screen"><div className="big">Teléfono bloqueado</div><p className="muted">Este teléfono fue bloqueado o retirado por administración. Los datos de empleados se eliminaron del equipo.</p></div>
+        <div className="screen">
+          <div className="big">Teléfono bloqueado</div>
+          <p className="muted">Este teléfono fue bloqueado o retirado por administración. Los datos de empleados se eliminaron del equipo.</p>
+          <p className="muted" style={{ fontSize: 15 }}>Si fue un error: en el panel, Teléfonos → «Reactivar (emitir código)», y luego active este teléfono con ese código.</p>
+          <button className="btn" onClick={async () => {
+            const pending = counts?.pending ?? 0;
+            const msg = pending > 0
+              ? `Se borrarán ${pending} marcaciones que no se enviaron (el servidor ya no las aceptaría). ¿Activar de nuevo con un código?`
+              : '¿Activar este teléfono de nuevo con un código del panel?';
+            if (!window.confirm(msg)) return;
+            await svc.resetForReactivation();
+            await refresh();
+            setView({ name: 'setup' });
+          }}>Activar de nuevo con un código</button>
+        </div>
       )}
       {view.name === 'home' && (
         <button className="screen full" style={{ background: 'none', border: 0, color: 'inherit', font: 'inherit' }} onClick={() => {

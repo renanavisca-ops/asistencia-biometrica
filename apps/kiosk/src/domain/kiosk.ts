@@ -243,6 +243,16 @@ export class KioskService {
     }
   }
 
+  /**
+   * Teléfono bloqueado y luego reactivado en el panel con un código nuevo: se borra todo lo local (estado, claves,
+   * empleados y marcaciones sin enviar, que el servidor ya no aceptaría) para activarlo de nuevo.
+   */
+  async resetForReactivation(): Promise<{ lostPending: number }> {
+    const c = await this.store.counts();
+    await this.store.resetDevice();
+    return { lostPending: c.pending };
+  }
+
   async status() {
     const st = await this.store.getState();
     return { state: st, counts: await this.store.counts(), rosterSize: (await this.store.getRoster()).length };

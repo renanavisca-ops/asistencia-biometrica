@@ -11,10 +11,11 @@ export default async function Admins({ searchParams }: { searchParams: SP }) {
   const { supabase, org, orgWide, isSuper, user } = await getContext(sp.org);
   if (!org) return <p>Sin organización.</p>;
   if (!orgWide('admin.manage')) return <p>Sin permiso para gestionar administradores.</p>;
-  const [{ data: grants }, { data: admins }, { data: orgs }] = await Promise.all([
+  const [{ data: grants }, { data: admins }, { data: orgs }, { data: stores }] = await Promise.all([
     supabase.from('admin_role_grants').select('*, admins(display_name, email), stores(code, name), regions(name)').or(`organization_id.eq.${org.id},role.eq.superadmin`).is('revoked_at', null).order('granted_at'),
     supabase.from('admins').select('user_id, display_name, email').order('display_name'),
     isSuper ? supabase.from('organizations').select('id, name').order('name') : Promise.resolve({ data: [{ id: org.id, name: org.name }] }),
+    supabase.from('stores').select('id, code, name').eq('organization_id', org.id).eq('status', 'active').order('code'),
   ]);
   return (
     <>
@@ -40,9 +41,15 @@ export default async function Admins({ searchParams }: { searchParams: SP }) {
           <label>Persona<select name="user_id" required>{(admins ?? []).filter((a) => a.user_id !== user.id).map((a) => <option key={a.user_id} value={a.user_id}>{a.display_name} ({a.email})</option>)}</select></label>
           <label>Rol<select name="role">
             <option value="central_admin">Administrador central</option>
+            <option value="supervisor">Supervisor (solo la sucursal elegida)</option>
+            <option value="auditor">Auditor (solo lectura)</option>
             {isSuper && <option value="superadmin">Superadministrador</option>}
           </select></label>
+          <label>Ámbito (supervisor)<select name="scope" defaultValue=""><option value="">Toda la organización</option>
+            {(stores ?? []).map((st) => <option key={st.id} value={`s:${st.id}`}>Sucursal {st.code} · {st.name}</option>)}</select></label>
           <button>Asignar</button></form>
+        <p className="muted">El supervisor ve la asistencia, alertas y expedientes solo de los empleados de sus sucursales y puede registrar llamadas de atención;
+          no da de baja, no anula registros ni genera reportes. El auditor solo consulta. Para invitar a una persona nueva como supervisor, invítela primero y luego asígnele el rol aquí.</p>
       </details>
     </>
   );

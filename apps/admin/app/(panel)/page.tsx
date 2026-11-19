@@ -3,10 +3,11 @@ import { getContext } from '@/lib/context';
 import { ago } from '@/lib/format';
 import type { SP } from '@/components/Flash';
 import { PresenceNow } from '@/components/PresenceNow';
+import { HrKpis } from '@/components/HrKpis';
 
 export default async function Home({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const { supabase, org, isSuper } = await getContext(sp.org);
+  const { supabase, org, isSuper, can } = await getContext(sp.org);
   if (!org) {
     return (
       <div className="card">
@@ -18,6 +19,8 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   }
   const since = new Date(); since.setHours(0, 0, 0, 0);
   const staleCut = new Date(Date.now() - 24 * 3600e3).toISOString();
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? '') ? sp.month! : new Date().toISOString().slice(0, 7);
+  const { data: storeList } = await supabase.from('stores').select('id, code, name').eq('organization_id', org.id).eq('status', 'active').order('code');
   const [emp, stores, devices, inc, today, review, staleDev] = await Promise.all([
     supabase.from('employees').select('id', { count: 'exact', head: true }).eq('organization_id', org.id).eq('status', 'active'),
     supabase.from('stores').select('id', { count: 'exact', head: true }).eq('organization_id', org.id).eq('status', 'active'),
@@ -45,6 +48,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         <div className="card kpi"><b>{review.count ?? 0}</b><span>Eventos en revisión</span></div>
       </div>
       <PresenceNow sb={supabase} org={org.id} />
+      <HrKpis sb={supabase} org={org.id} month={month} store={sp.store || undefined} stores={storeList ?? []} can={can} />
       <h3>Teléfonos sin sincronizar en 24 h</h3>
       {staleDev.data?.length ? (
         <table><thead><tr><th>Teléfono</th><th>Sede</th><th>Última sincronización</th></tr></thead><tbody>

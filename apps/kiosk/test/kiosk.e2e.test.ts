@@ -129,6 +129,24 @@ d('kiosk ↔ device-api ↔ Postgres', () => {
     expect(await A.svc.sync()).toMatchObject({ ok: true, rosterSize: 1, revoked: 1 });
     expect(await A.svc.punch(id(LUIS))).toEqual({ kind: 'refused', reason: 'unknown_employee' });
 
+    // 5b. Baja laboral de Ana mientras el teléfono B está sin internet y ya registró una entrada suya:
+    //     la marcación previa no se pierde, la baja conserva el historial y tras sincronizar Ana deja de estar autorizada.
+    online = false;
+    B.platform.advance(3_600_000);
+    expect(await B.svc.punch(id(ANA))).toMatchObject({ kind: 'recorded', eventType: 'IN' });
+    online = true;
+    const [{ n: before }] = await sql`select count(*)::int n from public.attendance_events where employee_id = ${ANA}`;
+    await asAdmin((tx) => tx`select public.terminate_employee(${ANA}::uuid, 'resignation', current_date, 'Renuncia voluntaria (prueba)', null, null, null)`);
+    // revoked 2: B no sincronizaba desde el traslado de Luis (paso 5), así que retira a ambos.
+    expect(await B.svc.sync()).toMatchObject({ ok: true, rosterSize: 0, revoked: 2 });
+    expect(await B.svc.punch(id(ANA))).toEqual({ kind: 'refused', reason: 'unknown_employee' });
+    const [{ n: after }] = await sql`select count(*)::int n from public.attendance_events where employee_id = ${ANA}`;
+    expect(after).toBe(before + 1); // la entrada offline previa a la baja quedó registrada
+    const [p] = await sql`select end_type, end_reason from public.employment_periods where employee_id = ${ANA} and ended_on is not null`;
+    expect(p).toMatchObject({ end_type: 'resignation', end_reason: 'Renuncia voluntaria (prueba)' });
+    const [{ st }] = await sql`select status::text st from public.biometric_enrollments where employee_id = ${ANA} order by enrolled_at desc limit 1`;
+    expect(st).toBe('revoked');
+
     // 6. Bloqueo del teléfono A: borra roster local y deja de marcar.
     await asAdmin((tx) => tx`select public.set_device_status(${DEV}::uuid, 'blocked', 'Teléfono extraviado')`);
     expect(await A.svc.sync()).toEqual({ ok: false, error: 'device_blocked', retryable: false });

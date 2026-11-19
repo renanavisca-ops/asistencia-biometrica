@@ -2,21 +2,22 @@ import { notFound } from 'next/navigation';
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
 import { fmtDateTime, fmtDuration, STATE_LABEL } from '@/lib/format';
-import { revokeAssignment, setDocument, setStatus, transfer, updateEmployee } from '../actions';
+import { revokeAssignment, setDocument, transfer, updateEmployee } from '../actions';
+import { HrSections, LifecycleCard } from './HrSections';
 import { COUNTRIES, DOC_TYPES } from '@/lib/documents';
 import { RevealDocument } from './RevealDocument';
 
 export default async function Employee({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SP }) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
-  const { supabase, org, orgWide, can } = await getContext(sp.org);
+  const ctx = await getContext(sp.org);
+  const { supabase, org, orgWide, can } = ctx;
   const { data: e } = await supabase.from('employees').select('*').eq('id', id).maybeSingle();
   if (!e || !org) notFound();
-  const [{ data: asg }, { data: stores }, { data: enr }, { data: sessions }, { data: hist }] = await Promise.all([
+  const [{ data: asg }, { data: stores }, { data: enr }, { data: sessions }] = await Promise.all([
     supabase.from('employee_store_assignments').select('*, stores(name, code)').eq('employee_id', id).order('valid_from', { ascending: false }),
     supabase.from('stores').select('id, name, code').eq('organization_id', e.organization_id).eq('status', 'active').order('code'),
     supabase.from('biometric_enrollments').select('id, status, enrolled_at, sample_count, pad_passed, model_versions!biometric_enrollments_recognition_model_id_fkey(name, version)').eq('employee_id', id).order('enrolled_at', { ascending: false }),
     supabase.from('attendance_sessions').select('*, stores(name)').eq('employee_id', id).order('opened_at', { ascending: false, nullsFirst: false }).limit(20),
-    supabase.from('employee_status_history').select('*').eq('employee_id', id).order('changed_at', { ascending: false }),
   ]);
   const manage = orgWide('employee.manage'), assign = orgWide('assignment.manage');
   const now = Date.now();
@@ -45,19 +46,7 @@ export default async function Employee({ params, searchParams }: { params: Promi
             </form>
           ) : <p>{e.first_name} {e.last_name}</p>}
         </div>
-        <div className="card">
-          <h3>Estado laboral: {e.status}</h3>
-          {manage && (
-            <form action={setStatus} style={{ display: 'grid', gap: 8 }}>
-              <OrgField org={org.id} /><input type="hidden" name="id" value={e.id} />
-              <label>Nuevo estado<select name="status" defaultValue={e.status}>
-                <option value="active">Activo</option><option value="suspended">Suspendido</option><option value="terminated">Baja (revoca asignaciones)</option></select></label>
-              <label>Motivo<input name="reason" required minLength={5} /></label>
-              <button className="secondary">Cambiar estado</button>
-            </form>
-          )}
-          <ul className="muted">{(hist ?? []).map((h) => <li key={h.id}>{fmtDateTime(h.changed_at)}: {h.from_status ?? '—'} → {h.to_status} {h.reason ? `(${h.reason})` : ''}</li>)}</ul>
-        </div>
+        <LifecycleCard ctx={ctx} e={e} stores={stores ?? []} />
       </div>
 
       <div className="card">
@@ -132,6 +121,7 @@ export default async function Employee({ params, searchParams }: { params: Promi
           </tbody></table>
         </div>
       )}
+      <HrSections ctx={ctx} e={e} stores={stores ?? []} />
     </>
   );
 }

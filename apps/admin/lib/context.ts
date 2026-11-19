@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { supabaseServer } from './supabase/server';
 
 export type Grant = { role: 'superadmin' | 'central_admin' | 'supervisor' | 'auditor'; organization_id: string | null; store_id: string | null; region_id: string | null };
-export type Org = { id: string; name: string };
+export type Org = { id: string; name: string; features?: Record<string, boolean> | null };
 
 /** Contexto del administrador autenticado. Los permisos efectivos los decide RLS; esto solo adapta la interfaz. */
 export async function getContext(orgParam?: string) {
@@ -12,7 +12,7 @@ export async function getContext(orgParam?: string) {
   const [{ data: admin }, { data: grants }, { data: orgs }, { data: perms }] = await Promise.all([
     supabase.from('admins').select('display_name, email, status').eq('user_id', user.id).maybeSingle(),
     supabase.from('admin_role_grants').select('role, organization_id, store_id, region_id').eq('user_id', user.id).is('revoked_at', null),
-    supabase.from('organizations').select('id, name').order('name'),
+    supabase.from('organizations').select('id, name, features').order('name'),
     supabase.from('role_permissions').select('role, permission'),
   ]);
   const g = (grants ?? []) as Grant[];
@@ -28,7 +28,9 @@ export async function getContext(orgParam?: string) {
   const orgWide = (perm: string) => (support ? READ.includes(perm) :
     g.some((x) => x.role !== 'superadmin' && x.organization_id === org?.id && !x.store_id && !x.region_id &&
       (perms ?? []).some((p) => p.role === x.role && p.permission === perm)));
-  return { supabase, user, admin, grants: g, isSuper, support, orgs: orgList, org, can, orgWide };
+  /** Módulos habilitados por el plan de la organización (ausente = habilitado). */
+  const feature = (key: string) => org?.features?.[key] !== false;
+  return { supabase, user, admin, grants: g, isSuper, support, orgs: orgList.map(({ id, name }) => ({ id, name })), org, can, orgWide, feature };
 }
 
 export type Ctx = Awaited<ReturnType<typeof getContext>>;

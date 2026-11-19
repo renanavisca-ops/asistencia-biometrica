@@ -30,8 +30,8 @@ export function PlanBanner({ orgs, supportOrgs }: { orgs: string[]; supportOrgs:
   if (w.has('pending_deletion')) msgs.push({ kind: 'error', text: `Eliminación de la cuenta programada: sus datos se borrarán definitivamente el ${d(st.deletionDueAt)}. Hasta entonces puede descargarlos o cancelar la eliminación en «Privacidad y cuenta».` });
   if (w.has('expired')) msgs.push({ kind: 'error', text: `Su membresía (${st.planLabel}) venció el ${d(st.paidUntil)}. El panel está en solo lectura y los teléfonos ya no registran marcaciones hasta renovarla.` });
   if (w.has('expiring_soon')) msgs.push({ kind: 'warn', text: `Su membresía (${st.planLabel}) vence el ${d(st.paidUntil)}. Renuévela para que los teléfonos sigan registrando marcaciones (si su tarjeta venció, actualícela).` });
-  if (w.has('at_limit')) msgs.push({ kind: 'warn', text: `Llegó al límite de su plan: ${st.enrolled} de ${st.limit} empleados con rostro registrado (${st.planLabel}). Solo podrá enrolar más empleados con el plan ${st.nextPlanLabel}.` });
-  if (w.has('near_limit')) msgs.push({ kind: 'info', text: `Se acerca al límite de su plan: ${st.enrolled} de ${st.limit} empleados con rostro registrado (${st.planLabel}).` });
+  if (w.has('at_limit')) msgs.push({ kind: 'warn', text: `Llegó al límite de su plan: ${st.enrolled} de ${st.limit} empleados vigentes (${st.planLabel}). Para dar de alta más empleados debe dar de baja a alguien o ampliar al plan ${st.nextPlanLabel}.` });
+  if (w.has('near_limit')) msgs.push({ kind: 'info', text: `Se acerca al límite de su plan: ${st.enrolled} de ${st.limit} empleados vigentes (${st.planLabel}).` });
   if (st.supportUntil) msgs.push({ kind: 'info', text: `Acceso de soporte concedido al proveedor hasta el ${new Date(st.supportUntil).toLocaleString('es')} (solo lectura). Puede retirarlo en «Privacidad y cuenta».` });
   if (!msgs.length) return null;
   return (

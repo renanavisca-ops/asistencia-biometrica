@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 const LINKS: [string, string][] = [
   ['/', 'Inicio'], ['/attendance', 'Asistencia'], ['/incidents', 'Incidencias'], ['/employees', 'Empleados'],
+  ['/schedules', 'Horarios'], ['/alerts', 'Alertas'], ['/discipline', 'Disciplina'], ['/reports', 'Reportes'],
   ['/organizations', 'Sucursales'], ['/devices', 'Teléfonos'], ['/settings', 'Política offline'],
   ['/admins', 'Administradores'], ['/privacy', 'Privacidad y cuenta'], ['/audit', 'Auditoría'],
 ];

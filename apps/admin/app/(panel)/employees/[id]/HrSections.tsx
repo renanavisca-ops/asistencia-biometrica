@@ -77,8 +77,9 @@ export async function HrSections({ ctx, e, stores }: { ctx: Ctx; e: Emp; stores:
   const { supabase, org, can, orgWide } = ctx;
   if (!org || !can('hr.read') || !ctx.feature('hr')) return null;
   const since = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
-  const [periods, events, flags, alerts, corrections, incidents, records, docs, cats, admins] = await Promise.all([
-    supabase.from('employment_periods').select('*, hr_catalog(label)').eq('employee_id', e.id).order('period_no', { ascending: false }),
+  const [periods, sensitive, events, flags, alerts, corrections, incidents, records, docs, cats, admins] = await Promise.all([
+    supabase.from('employment_periods').select('id, period_no, started_on, ended_on, end_type, end_recorded_by, end_recorded_at').eq('employee_id', e.id).order('period_no', { ascending: false }),
+    supabase.rpc('termination_details', { p_employee: e.id }),
     supabase.from('employment_events').select('*').eq('employee_id', e.id).order('recorded_at', { ascending: false }).limit(50),
     supabase.from('attendance_day_flags').select('*, stores(timezone)').eq('employee_id', e.id).gte('work_date', since).order('work_date', { ascending: false }),
     supabase.from('alerts').select('*').eq('employee_id', e.id).order('period_key', { ascending: false }),
@@ -89,6 +90,8 @@ export async function HrSections({ ctx, e, stores }: { ctx: Ctx; e: Emp; stores:
     supabase.from('hr_catalog').select('id, label').eq('organization_id', e.organization_id).eq('kind', 'discipline_category').eq('active', true).order('sort'),
     supabase.from('admins').select('user_id, display_name'),
   ]);
+  type Det = { period_id: string; cause: string | null; reason: string; comments: string | null; notes: string | null };
+  const detOf = (id: string) => ((sensitive.data ?? []) as Det[]).find((d) => d.period_id === id);
   const who = (id: string | null) => (admins.data ?? []).find((a) => a.user_id === id)?.display_name ?? '—';
   const lates = (flags.data ?? []).filter((f) => f.kind === 'late');
   const noShows = (flags.data ?? []).filter((f) => f.kind === 'no_show');
@@ -106,15 +109,19 @@ export async function HrSections({ ctx, e, stores }: { ctx: Ctx; e: Emp; stores:
         <table><thead><tr><th>#</th><th>Ingreso</th><th>Salida</th><th>Tipo y motivo</th><th>Registrado por</th></tr></thead><tbody>
           {(periods.data ?? []).map((p) => (
             <tr key={p.id}><td>{p.period_no}</td><td>{fmtDate(p.started_on)}</td><td>{p.ended_on ? fmtDate(p.ended_on) : <span className="badge ok">vigente</span>}</td>
-              <td>{p.end_type ? <><b>{END_TYPE[p.end_type]}</b>{(p.hr_catalog as { label: string } | null)?.label ? ` · ${(p.hr_catalog as { label: string }).label}` : ''}
-                <div>{p.end_reason}</div>{p.end_comments && <div className="muted">Comentarios: {p.end_comments}</div>}{p.end_notes && <div className="muted">Observaciones: {p.end_notes}</div>}</> : '—'}</td>
+              <td>{p.end_type ? (() => {
+                const det = detOf(p.id);
+                return <><b>{END_TYPE[p.end_type]}</b>{det?.cause ? ` · ${det.cause}` : ''}
+                  {det ? <><div>{det.reason}</div>{det.comments && <div className="muted">Comentarios: {det.comments}</div>}{det.notes && <div className="muted">Observaciones: {det.notes}</div>}</>
+                    : <div className="muted">Motivo reservado: solo la administración central o personas con permiso expreso.</div>}</>;
+              })() : '—'}</td>
               <td>{p.end_recorded_at ? <>{who(p.end_recorded_by)}<div className="muted">{fmtDateTime(p.end_recorded_at)}</div></> : '—'}</td></tr>
           ))}
         </tbody></table>
         <h4>Eventos</h4>
         <ul className="muted">{(events.data ?? []).map((v) => (
           <li key={v.id}>{fmtDate(v.effective_on)} — <b>{EMP_EVENT[v.kind] ?? v.kind}</b>
-            {v.details?.reason ? `: ${v.details.reason}` : v.details?.notes ? `: ${v.details.notes}` : ''}{v.details?.until ? ` (hasta ${fmtDate(v.details.until)})` : ''}
+            {v.details?.end_type ? `: ${END_TYPE[v.details.end_type] ?? ''}` : v.details?.reason ? `: ${v.details.reason}` : v.details?.notes ? `: ${v.details.notes}` : ''}{v.details?.until ? ` (hasta ${fmtDate(v.details.until)})` : ''}
             {' '}· {who(v.recorded_by)}</li>
         ))}</ul>
       </div>

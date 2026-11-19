@@ -32,9 +32,9 @@ insert into public.employees (id, organization_id, employee_code, first_name, la
   ('a3000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000000', 'E2', 'Luis', 'Gómez'),
   ('b3000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000000', 'E1', 'Rosa', 'Mora');
 insert into public.employee_store_assignments (organization_id, employee_id, store_id, valid_from) values
-  ('a0000000-0000-4000-8000-000000000000', 'a3000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', now() - interval '30 days'),
-  ('a0000000-0000-4000-8000-000000000000', 'a3000000-0000-4000-8000-000000000002', 'a2000000-0000-4000-8000-000000000002', now() - interval '30 days'),
-  ('b0000000-0000-4000-8000-000000000000', 'b3000000-0000-4000-8000-000000000001', 'b2000000-0000-4000-8000-000000000001', now() - interval '30 days');
+  ('a0000000-0000-4000-8000-000000000000', 'a3000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', '2026-10-01T00:00:00Z'),
+  ('a0000000-0000-4000-8000-000000000000', 'a3000000-0000-4000-8000-000000000002', 'a2000000-0000-4000-8000-000000000002', '2026-10-01T00:00:00Z'),
+  ('b0000000-0000-4000-8000-000000000000', 'b3000000-0000-4000-8000-000000000001', 'b2000000-0000-4000-8000-000000000001', '2026-10-01T00:00:00Z');
 
 insert into auth.users (id, email) values
   ('00000000-0000-4000-8000-00000000000a', 'super@x'), ('00000000-0000-4000-8000-00000000000b', 'ca@x'),
@@ -57,7 +57,7 @@ values ('a0000000-0000-4000-8000-000000000000', 'a3000000-0000-4000-8000-0000000
         'a2000000-0000-4000-8000-000000000009', 'documento_presencial', 5, true, 'c0000000-0000-4000-8000-000000000001');
 
 insert into public.devices (id, organization_id, store_id, label, status, activated_at) values
-  ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000000', 'a2000000-0000-4000-8000-000000000001', 'Teléfono A1', 'active', now() - interval '10 days');
+  ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000000', 'a2000000-0000-4000-8000-000000000001', 'Teléfono A1', 'active', '2026-10-01T00:00:00Z');
 
 -- ---------- Aislamiento RLS ----------
 select test.as_user('00000000-0000-4000-8000-00000000000b');
@@ -120,7 +120,7 @@ select test.ok((select count(*) from public.incidents where kind = 'sequence_con
 -- Conflicto offline: otra ENTRADA del mismo empleado desde otro dispositivo en mitad de la sesión.
 reset role;
 insert into public.devices (id, organization_id, store_id, label, status, activated_at) values
-  ('d0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000000', 'a2000000-0000-4000-8000-000000000001', 'Teléfono A1 bis', 'active', now() - interval '10 days');
+  ('d0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000000', 'a2000000-0000-4000-8000-000000000001', 'Teléfono A1 bis', 'active', '2026-10-01T00:00:00Z');
 set role service_role;
 create temp table acks3 as select private.ingest_device_events('d0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000003', $$[
   {"id":"e2000000-0000-4000-8000-000000000001","storeId":"a2000000-0000-4000-8000-000000000001","employeeId":"a3000000-0000-4000-8000-000000000001","eventType":"IN","deviceSeq":1,"occurredAt":"2026-11-07T18:00:00Z","tzOffsetMin":-360,"monotonicMs":1,"bootId":"x","clockFlags":[],"decisionFlags":[],"capturedOffline":true,"policyVersion":1,"appVersion":"0.1.0","signature":"sig"}

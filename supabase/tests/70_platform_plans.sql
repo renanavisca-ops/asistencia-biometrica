@@ -34,26 +34,29 @@ select test.as_user(:SUPER);
 select test.ok((select count(*) from public.employees) = 0, 'al retirar el soporte deja de ver los datos');
 select test.reset();
 
--- 3. Límite del plan gratuito (5 empleados con rostro).
-create temp table emps70 as select gen_random_uuid() id, n from generate_series(1, 6) n;
+-- 3. Límite del plan gratuito: 5 empleados VIGENTES (los dados de baja no cuentan).
+create temp table emps70 as select gen_random_uuid() id, n from generate_series(1, 5) n;
 grant select on emps70 to authenticated;
-insert into public.employees (id, organization_id, first_name, last_name) select id, :ORGB, 'E' || n, 'Plan' from emps70;
-insert into public.biometric_consents (id, organization_id, employee_id, legal_basis, notice_version, accepted_at, recorded_by)
-  select id, :ORGB, id, 'consentimiento_expreso', 'v1', now(), :CB from emps70;
-insert into public.biometric_enrollments (organization_id, employee_id, consent_id, enrolled_by, enrolled_at_store_id, identity_verification_method, sample_count, quality, pad_passed, recognition_model_id)
-  select :ORGB, id, id, :CB, 'b2000000-0000-4000-8000-000000000001', 'prueba', 3, '{}', true, 'c0000000-0000-4000-8000-000000000001' from emps70 where n <= 4;
+select private.current_employee_count(:ORGB) as base \gset
+insert into public.employees (id, organization_id, first_name, last_name) select id, :ORGB, 'E' || n, 'Plan' from emps70 where n <= 4 - :base;
 select test.as_user(:CB);
 select test.ok((public.org_plan_status(:ORGB) -> 'warnings') ? 'near_limit', 'aviso al acercarse al límite (4 de 5)');
 select test.reset();
-insert into public.biometric_enrollments (organization_id, employee_id, consent_id, enrolled_by, enrolled_at_store_id, identity_verification_method, sample_count, quality, pad_passed, recognition_model_id)
-  select :ORGB, id, id, :CB, 'b2000000-0000-4000-8000-000000000001', 'prueba', 3, '{}', true, 'c0000000-0000-4000-8000-000000000001' from emps70 where n = 5;
+insert into public.employees (id, organization_id, first_name, last_name) select id, :ORGB, 'E' || n, 'Plan' from emps70 where n = 4 - :base + 1;
 select test.as_user(:CB);
 select test.ok((public.org_plan_status(:ORGB) -> 'warnings') ? 'at_limit', 'aviso de límite alcanzado (5 de 5)');
 select test.ok((public.org_plan_status(:ORGB) ->> 'nextPlanLabel') = '6–10 empleados', 'indica el plan siguiente');
-create temp table e6 as select id from emps70 where n = 6;
-grant select on e6 to authenticated;
-select test.ok(test.raises($$select public.enroll_biometric((select id from e6), (select id from e6), 'b2000000-0000-4000-8000-000000000001', 'x', array['AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA','AACAPwAAAAAAAAAA'], '{}', true, 0.9, 'c0000000-0000-4000-8000-000000000001', null)$$), 'no puede enrolar al sexto sin plan de pago');
+select test.ok(test.raises($$select public.create_employee('b0000000-0000-4000-8000-000000000000', 'Sexta', 'Persona', null, null, null)$$), 'el servidor no permite un sexto empleado vigente en el plan gratuito');
 select test.reset();
+-- Los dados de baja no consumen cupo y conservan su historial.
+select test.as_user(:CB);
+select public.terminate_employee((select id from emps70 where n = 1), 'resignation', current_date, 'Consiguió otro empleo', 'Entregó carta', null);
+select test.ok(private.current_employee_count(:ORGB) = 4, 'tras la baja quedan 4 vigentes');
+select test.ok((public.create_employee(:ORGB, 'Reemplazo', 'Persona', null, null, null) ->> 'id') is not null, 'el cupo liberado permite un alta');
+select test.reset();
+create temp table e6 as select id from emps70 where n = 5;
+grant select on e6 to authenticated;
+insert into public.employees (id, organization_id, first_name, last_name, status) select id, :ORGB, 'Baja', 'Previa', 'terminated' from e6;
 -- El superadministrador asigna plan 6–10 con vencimiento: ya no está en el límite.
 select test.as_user(:SUPER);
 select test.ok(test.raises($$select public.platform_set_plan('b0000000-0000-4000-8000-000000000000', false, 12, now() + interval '30 days')$$), 'el plan debe ser un tramo válido');

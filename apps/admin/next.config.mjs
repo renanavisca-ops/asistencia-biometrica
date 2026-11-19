@@ -10,6 +10,8 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@asistencia/core'],
+  // Carga del Excel de horarios semanales (acción del servidor).
+  experimental: { serverActions: { bodySizeLimit: '3mb' } },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

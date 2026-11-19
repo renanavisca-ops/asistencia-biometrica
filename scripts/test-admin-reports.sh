@@ -15,4 +15,4 @@ PSQL=(psql -h 127.0.0.1 -p "$PORT" -U postgres -d postgres -v ON_ERROR_STOP=1 -q
 for f in "$ROOT"/supabase/migrations/*.sql; do "${PSQL[@]}" -f "$f"; done
 
 cd "$ROOT/apps/admin"
-DATABASE_URL="postgres://postgres@127.0.0.1:$PORT/postgres" npx vitest run test/reports.e2e.test.ts
+DATABASE_URL="postgres://postgres@127.0.0.1:$PORT/postgres" npx vitest run test/

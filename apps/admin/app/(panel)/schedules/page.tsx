@@ -1,7 +1,9 @@
 import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
 import { EXC_KIND, WEEKDAYS, fmtDate } from '@/lib/hr';
+import Link from 'next/link';
 import { addException, assign, deleteException, endAssignment, recompute, saveSchedule } from './actions';
+import { StoreWeek } from './StoreWeek';
 
 type Day = { weekday: number; start_time: string; end_time: string | null };
 const hm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '');
@@ -32,14 +34,15 @@ function ScheduleForm({ org, sched }: { org: string; sched?: { id: string; name:
 /** Horarios de referencia OPCIONALES: solo se calculan tardanzas para quien tenga uno asignado. */
 export default async function Schedules({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const { supabase, org, orgWide, feature } = await getContext(sp.org);
+  const ctx = await getContext(sp.org);
+  const { supabase, org, orgWide, feature } = ctx;
   if (!org) return <p>Sin organización.</p>;
   if (!feature('schedules')) return <p>Este módulo no está habilitado en el plan de su organización.</p>;
   const manage = orgWide('schedule.manage');
   const [{ data: scheds }, { data: days }, { data: asg }, { data: exc }, { data: stores }, { data: emps }] = await Promise.all([
-    supabase.from('work_schedules').select('*').eq('organization_id', org.id).order('name'),
+    supabase.from('work_schedules').select('*').eq('organization_id', org.id).eq('source', 'manual').order('name'),
     supabase.from('work_schedule_days').select('schedule_id, weekday, start_time, end_time').eq('organization_id', org.id),
-    supabase.from('schedule_assignments').select('*, work_schedules(name), stores(code, name), employees(first_name, last_name, employee_code)').eq('organization_id', org.id).order('valid_from', { ascending: false }),
+    supabase.from('schedule_assignments').select('*, work_schedules(name), stores(code, name), employees(first_name, last_name, employee_code)').eq('organization_id', org.id).or('note.is.null,note.not.like.semana:*').order('valid_from', { ascending: false }),
     supabase.from('schedule_exceptions').select('*, stores(code), employees(first_name, last_name)').eq('organization_id', org.id).gte('on_date', new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10)).order('on_date', { ascending: false }),
     supabase.from('stores').select('id, code, name').eq('organization_id', org.id).eq('status', 'active').order('code'),
     supabase.from('employees').select('id, first_name, last_name, employee_code').eq('organization_id', org.id).neq('status', 'terminated').order('last_name'),
@@ -52,10 +55,16 @@ export default async function Schedules({ searchParams }: { searchParams: SP }) 
     </>
   );
   const nowD = today();
+  const selStore = (stores ?? []).find((s) => s.id === sp.store);
   return (
     <>
       <h2>Horarios de referencia</h2>
       <Flash sp={sp} />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+        <Link className={`tab ${!sp.store ? 'active' : ''}`} href={`/schedules?org=${org.id}`}>General</Link>
+        {(stores ?? []).map((s) => <Link key={s.id} className={`tab ${sp.store === s.id ? 'active' : ''}`} href={`/schedules?org=${org.id}&store=${s.id}`}>{s.code} · {s.name}</Link>)}
+      </div>
+      {selStore ? <StoreWeek ctx={ctx} store={selStore} week={sp.week} /> : <>
       <p className="muted">Los horarios son <b>opcionales</b>. Sin horario asignado no se calcula ninguna tardanza. Una llegada tarde es la <b>primera entrada válida</b> del día posterior a la
         hora programada más la tolerancia; cuenta una sola vez por jornada. Prioridad: excepción del empleado › excepción de la sucursal › horario del empleado › horario de la sucursal.
         Las correcciones de asistencia y las marcaciones offline que llegan después recalculan automáticamente.</p>
@@ -131,6 +140,7 @@ export default async function Schedules({ searchParams }: { searchParams: SP }) 
             <label>Desde<input type="date" name="from" required defaultValue={nowD.slice(0, 8) + '01'} /></label><button className="secondary">Recalcular</button></form>
         </div>
       )}
+      </>}
     </>
   );
 }

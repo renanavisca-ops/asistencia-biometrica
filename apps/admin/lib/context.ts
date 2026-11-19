@@ -17,7 +17,18 @@ export async function getContext(orgParam?: string) {
   ]);
   const g = (grants ?? []) as Grant[];
   const isSuper = g.some((x) => x.role === 'superadmin');
-  const orgList = (orgs ?? []) as Org[];
+  const memberOf = (id: string) => g.some((x) => x.role !== 'superadmin' && x.organization_id === id);
+  // Primero las organizaciones propias del usuario; después las que le concedieron acceso de soporte.
+  const orgList = ((orgs ?? []) as Org[]).sort((a, b) => Number(memberOf(b.id)) - Number(memberOf(a.id)));
+  const { data: sup } = isSuper ? await supabase.from('support_access').select('organization_id, expires_at').is('revoked_at', null).gt('expires_at', new Date().toISOString())
+    : { data: [] as { organization_id: string; expires_at: string }[] };
+  const ROLE_LABEL: Record<string, string> = { central_admin: 'Administrador central', supervisor: 'Supervisor', auditor: 'Auditor' };
+  /** Contextos disponibles para el selector (la plataforma se agrega en la interfaz si es superadministrador). */
+  const contexts = orgList.map((o) => {
+    const roles = [...new Set(g.filter((x) => x.role !== 'superadmin' && x.organization_id === o.id).map((x) => ROLE_LABEL[x.role] ?? x.role))];
+    const until = (sup ?? []).filter((x) => x.organization_id === o.id).map((x) => x.expires_at).sort().pop() ?? null;
+    return { id: o.id, name: o.name, kind: roles.length ? 'member' as const : 'support' as const, roles, supportUntil: roles.length ? null : until };
+  });
   const org = orgList.find((o) => o.id === orgParam) ?? orgList[0] ?? null;
   // El superadministrador NO tiene permisos dentro de las organizaciones (solo plataforma); con acceso de soporte ve en solo lectura.
   const roles = new Set(g.filter((x) => x.role !== 'superadmin' && x.organization_id === org?.id).map((x) => x.role));
@@ -30,7 +41,7 @@ export async function getContext(orgParam?: string) {
       (perms ?? []).some((p) => p.role === x.role && p.permission === perm)));
   /** Módulos habilitados por el plan de la organización (ausente = habilitado). */
   const feature = (key: string) => org?.features?.[key] !== false;
-  return { supabase, user, admin, grants: g, isSuper, support, orgs: orgList.map(({ id, name }) => ({ id, name })), org, can, orgWide, feature };
+  return { supabase, user, admin, grants: g, isSuper, support, orgs: orgList.map(({ id, name }) => ({ id, name })), contexts, org, can, orgWide, feature };
 }
 
 export type Ctx = Awaited<ReturnType<typeof getContext>>;

@@ -41,3 +41,15 @@ export async function invite(_prev: InviteState, fd: FormData): Promise<InviteSt
   return { status: 'ok', email, link: r.link,
     message: r.existing ? 'La persona ya tenía cuenta: se le asignó el rol. Puede entrar con su contraseña actual.' : 'Invitación creada. Envíe este enlace a la persona (WhatsApp o correo). Sirve una sola vez y vence (normalmente en 24 horas): úselo cuanto antes.' };
 }
+
+export async function grantExtra(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('grant_extra_permission', { p_user: s(fd, 'user_id'), p_org: s(fd, 'org'), p_permission: 'hr.sensitive' });
+  back('/admins', fd, error, 'Permiso concedido: ahora puede ver los motivos de baja de los empleados que ya ve');
+}
+
+export async function revokeExtra(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('revoke_extra_permission', { p_grant: s(fd, 'grant_id') });
+  back('/admins', fd, error, 'Permiso retirado');
+}

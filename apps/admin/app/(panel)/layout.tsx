@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
 import { getContext } from '@/lib/context';
-import { Nav } from '@/components/Nav';
+import { ContextBar, Nav } from '@/components/Nav';
+import { recordSupportView } from '@/lib/support';
 import { PlanBanner } from '@/components/PlanBanner';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   return (
     <div className="shell">
-      <Suspense><Nav orgs={ctx.orgs} isSuper={ctx.isSuper} who={`${ctx.admin.display_name} · ${ctx.grants.map((g) => g.role).join(', ')}`} /></Suspense>
+      <Suspense><Nav contexts={ctx.contexts} isSuper={ctx.isSuper} who={`${ctx.admin.display_name} · ${ctx.user.email}`} /></Suspense>
       <main>
+        <Suspense><ContextBar contexts={ctx.contexts} isSuper={ctx.isSuper} onSupport={recordSupportView} /></Suspense>
         <Suspense><PlanBanner orgs={ctx.orgs.map((o) => o.id)} supportOrgs={ctx.isSuper ? ctx.orgs.filter((o) => !ctx.grants.some((g) => g.role !== 'superadmin' && g.organization_id === o.id)).map((o) => o.id) : []} /></Suspense>
         {children}
       </main>

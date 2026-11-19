@@ -1,6 +1,6 @@
 'use client';
 import { useActionState, useState } from 'react';
-import { createOrg, type CreateOrgState } from './actions';
+import { createOrg, type CreateOrgState } from '../actions';
 
 const COUNTRIES: [string, string, string][] = [['GT', 'Guatemala', 'America/Guatemala'], ['SV', 'El Salvador', 'America/El_Salvador'], ['HN', 'Honduras', 'America/Tegucigalpa'],
   ['NI', 'Nicaragua', 'America/Managua'], ['CR', 'Costa Rica', 'America/Costa_Rica'], ['PA', 'Panamá', 'America/Panama'], ['BZ', 'Belice', 'America/Belize'], ['MX', 'México', 'America/Mexico_City']];

@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { back, s } from '@/lib/actions';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 const FEATURES = ['hr', 'schedules', 'alerts', 'reports'] as const;
 const num = (fd: FormData, k: string) => { const v = s(fd, k); return v ? Number(v) : null; };
@@ -16,20 +17,21 @@ export async function updateOrg(fd: FormData) {
     p_contact_phone: s(fd, 'contact_phone'), p_notes: s(fd, 'notes'), p_unlimited: fd.get('unlimited') === 'on',
     p_max_employees: num(fd, 'max_employees'), p_paid_until: until(fd), p_max_stores: num(fd, 'max_stores'), p_max_devices: num(fd, 'max_devices'), p_features: features,
   });
-  back('/platform', fd, error, 'Organización actualizada');
+  back('/platform/organizations', fd, error, 'Organización actualizada');
 }
 
 export async function setStatus(fd: FormData) {
   const sb = await supabaseServer();
   const { error } = await sb.rpc('platform_set_status', { p_org: s(fd, 'id'), p_status: s(fd, 'status'), p_reason: s(fd, 'reason') });
-  back('/platform', fd, error, s(fd, 'status') === 'suspended' ? 'Organización suspendida' : 'Organización reactivada');
+  back('/platform/organizations', fd, error, s(fd, 'status') === 'suspended' ? 'Organización suspendida' : 'Organización reactivada');
 }
 
 export async function createOwnOrg(fd: FormData) {
   const sb = await supabaseServer();
   const { data, error } = await sb.rpc('platform_create_own_org', { p_name: s(fd, 'name'), p_country: s(fd, 'country') });
-  if (!error && data) fd.set('org', String(data));
-  back('/platform', fd, error, 'Su organización fue creada (sin límite). Ya puede administrarla desde el menú.');
+  if (error || !data) back('/platform/organizations', fd, error ?? { message: 'No se pudo crear' }, '');
+  // Pasa directamente al área de su organización (como cualquier cliente).
+  redirect(`/?org=${data}&ok=${encodeURIComponent('Su organización fue creada. Está en el área de organización; vuelva a ★ Mi plataforma con el selector del menú.')}`);
 }
 
 export type CreateOrgState = { status: 'idle' | 'ok' | 'error'; message?: string; link?: string | null };
@@ -51,7 +53,7 @@ export async function createOrg(_prev: CreateOrgState, fd: FormData): Promise<Cr
       p_max_stores: ms, p_max_devices: md, p_features: {} });
     if (r.error) return { status: 'error', message: `Organización creada, pero no se guardaron los límites: ${r.error.message}` };
   }
-  revalidatePath('/platform');
+  revalidatePath('/platform/organizations');
   const email = s(fd, 'admin_email');
   if (!email) return { status: 'ok', message: 'Organización creada. Puede invitar a su administrador más tarde desde aquí o desde Administradores.' };
   const h = await headers();
@@ -67,4 +69,20 @@ export async function createOrg(_prev: CreateOrgState, fd: FormData): Promise<Cr
   const r = inv.data as { existing: boolean; link: string | null };
   return { status: 'ok', link: r.link, message: r.existing ? 'Organización creada. La persona ya tenía cuenta: se le asignó como administrador central.'
     : 'Organización creada. Envíe este enlace al administrador principal (un solo uso, vence en ~24 horas).' };
+}
+
+export async function applyPlan(fd: FormData) {
+  const sb = await supabaseServer();
+  const { error } = await sb.rpc('platform_apply_plan', { p_org: s(fd, 'id'), p_plan: s(fd, 'plan_id'), p_paid_until: until(fd) });
+  back('/platform/organizations', fd, error, 'Plan aplicado: límites y módulos actualizados');
+}
+
+export async function savePlan(fd: FormData) {
+  const sb = await supabaseServer();
+  const features = Object.fromEntries(FEATURES.filter((f) => fd.get(`f_${f}`) !== 'on').map((f) => [f, false]));
+  const { error } = await sb.rpc('platform_save_plan', {
+    p_id: s(fd, 'plan_id'), p_code: s(fd, 'code'), p_name: s(fd, 'name'), p_max_employees: num(fd, 'max_employees'), p_max_stores: num(fd, 'max_stores'),
+    p_max_devices: num(fd, 'max_devices'), p_features: features, p_price_note: s(fd, 'price_note'), p_active: fd.get('active') !== 'off', p_sort: num(fd, 'sort') ?? 100,
+  });
+  back('/platform/plans', fd, error, 'Plan guardado');
 }

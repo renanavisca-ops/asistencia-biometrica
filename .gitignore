@@ -23,3 +23,4 @@ apps/kiosk/public/models/
 apps/kiosk/public/vendor/
 apps/kiosk/dist-biotest/
 apps/kiosk/dist-e2e/
+apps/admin/e2e/screenshots/

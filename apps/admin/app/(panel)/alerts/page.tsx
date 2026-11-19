@@ -3,7 +3,7 @@ import { getContext } from '@/lib/context';
 import { Flash, OrgField, type SP } from '@/components/Flash';
 import { fmtDateTime } from '@/lib/format';
 import { ALERT_EVENT, ALERT_STATUS, fmtDate, fmtTime, monthEnd, monthStart } from '@/lib/hr';
-import { followup, saveRules } from './actions';
+import { followup, saveNotifications, saveRules } from './actions';
 
 type Emp = { first_name: string; last_name: string; employee_code: string };
 
@@ -89,6 +89,7 @@ export default async function Alerts({ searchParams }: { searchParams: SP }) {
         {!alerts?.length && <tr><td colSpan={6} className="muted">No hay alertas con estos filtros.</td></tr>}
       </tbody></table>
 
+      {orgWide('alert.manage') && <MailSettings org={org.id} rules={rules} sb={supabase} />}
       {orgWide('alert.manage') && (
         <div className="card" style={{ marginTop: 16 }}>
           <h3>Regla de tardanzas</h3>
@@ -100,5 +101,44 @@ export default async function Alerts({ searchParams }: { searchParams: SP }) {
         </div>
       )}
     </>
+  );
+}
+
+const NSTATUS: Record<string, [string, string]> = { pending: ['Pendiente', 'warn'], sent: ['Enviado', 'ok'], failed: ['Falló', 'err'], skipped: ['Omitido', ''] };
+
+/** Avisos por correo: destinatarios (administradores de la organización con acceso a alertas) y registro de envíos. */
+async function MailSettings({ org, rules, sb }: { org: string; rules: { email_enabled?: boolean; notify_admin_ids?: string[] } | null; sb: Awaited<ReturnType<typeof getContext>>['supabase'] }) {
+  const [{ data: grants }, { data: log }] = await Promise.all([
+    sb.from('admin_role_grants').select('user_id, role, admins(display_name, email)').eq('organization_id', org).is('revoked_at', null).neq('role', 'superadmin'),
+    sb.from('alert_notifications').select('id, recipient_email, status, attempts, last_error, created_at, sent_at, alerts(period_key, count, employees(first_name, last_name))')
+      .eq('organization_id', org).order('created_at', { ascending: false }).limit(30),
+  ]);
+  const people = [...new Map((grants ?? []).map((g) => [g.user_id, g.admins as unknown as { display_name: string; email: string }])).entries()];
+  const selected = new Set(rules?.notify_admin_ids ?? []);
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3>Avisos por correo</h3>
+      <p className="muted">Se envía un correo cuando un empleado alcanza el umbral de llegadas tarde del mes (uno por alerta y destinatario; las siguientes tardanzas
+        actualizan la alerta sin nuevos correos). El correo solo indica empleado, tienda, cantidad y mes, con un enlace al panel; nunca datos disciplinarios.
+        Si el envío falla, la alerta sigue en el panel y se reintenta.</p>
+      <form action={saveNotifications} style={{ display: 'grid', gap: 6 }}>
+        <input type="hidden" name="org" value={org} />
+        <label style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}><input type="checkbox" name="email_enabled" defaultChecked={!!rules?.email_enabled} style={{ minWidth: 0 }} /> Enviar avisos por correo</label>
+        <fieldset style={{ border: '1px solid #e5e7eb', borderRadius: 6 }}><legend className="muted">Destinatarios</legend>
+          {people.map(([id, a]) => <label key={id} style={{ flexDirection: 'row', gap: 6 }}><input type="checkbox" name="recipient" value={id} defaultChecked={selected.has(id)} style={{ minWidth: 0 }} /> {a?.display_name} ({a?.email})</label>)}
+        </fieldset>
+        <div><button className="secondary">Guardar avisos</button></div>
+      </form>
+      <h4>Últimos envíos</h4>
+      <table><thead><tr><th>Fecha</th><th>Alerta</th><th>Para</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>
+        {(log ?? []).map((n) => {
+          const a = n.alerts as unknown as { period_key: string; count: number; employees: { first_name: string; last_name: string } } | null;
+          return <tr key={n.id}><td>{new Date(n.created_at).toLocaleString('es')}</td><td>{a ? `${a.employees.last_name}, ${a.employees.first_name} · ${a.period_key} (${a.count})` : '—'}</td>
+            <td>{n.recipient_email}</td><td><span className={`badge ${NSTATUS[n.status]?.[1]}`}>{NSTATUS[n.status]?.[0]}</span>{n.attempts > 1 ? ` · ${n.attempts} intentos` : ''}</td>
+            <td className="muted">{n.last_error ?? (n.sent_at ? `enviado ${new Date(n.sent_at).toLocaleString('es')}` : '')}</td></tr>;
+        })}
+        {!log?.length && <tr><td colSpan={5} className="muted">Sin envíos todavía.</td></tr>}
+      </tbody></table>
+    </div>
   );
 }

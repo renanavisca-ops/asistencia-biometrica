@@ -69,9 +69,8 @@ export async function registerDocument(input: { employeeId: string; relatedType:
     p_employee_id: input.employeeId, p_related_type: input.relatedType, p_related_id: null, p_doc_type: input.docType,
     p_file_name: input.fileName, p_storage_path: input.path, p_size: input.size, p_mime: input.mime,
   });
-  if (error) {
-    await sb.storage.from('hr-documents').remove([input.path]); // no dejar archivos huérfanos
-    return { error: humanError(error) };
-  }
+  // Si el registro falla, el archivo queda sin documento: la limpieza diaria lo detecta (más de 24 h sin registro)
+  // y lo borra con la API de Storage (ver migración 20261120001400).
+  if (error) return { error: humanError(error) };
   return { ok: true };
 }

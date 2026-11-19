@@ -18,3 +18,7 @@ for f in "$ROOT"/supabase/migrations/*.sql; do "${PSQL[@]}" -f "$f"; done
 node "$ROOT/scripts/sync-shared.mjs" >/dev/null
 cd "$ROOT/supabase/functions/device-api"
 DATABASE_URL="postgres://postgres@127.0.0.1:$PORT/postgres" "$DENO" test --allow-net --allow-env --allow-read handler_test.ts
+cd "$ROOT/supabase/functions/admin-invite"
+"$DENO" test --allow-net --allow-env --allow-read handler_test.ts
+cd "$ROOT/supabase/functions/background-jobs"
+DATABASE_URL="postgres://postgres@127.0.0.1:$PORT/postgres" "$DENO" test --allow-net --allow-env --allow-read handler_test.ts

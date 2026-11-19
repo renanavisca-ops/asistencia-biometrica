@@ -61,7 +61,7 @@ export function ContextBar({ contexts, isSuper, onSupport }: { contexts: CtxOpti
   }
   if (!c) return isSuper ? <div className="ctxbar ctx-platform">No administra ninguna organización. Use ★ Mi plataforma o cree su organización propia en Plataforma › Organizaciones.</div> : null;
   if (c.kind === 'support') {
-    return <div className="ctxbar ctx-support">🛟 <b>Acceso de soporte a {c.name}</b> · solo lectura{c.supportUntil ? ` hasta ${new Date(c.supportUntil).toLocaleString('es')}` : ''}.
+    return <div className="ctxbar ctx-support">🛟 <b>Acceso de soporte a {c.name}</b> · solo lectura{c.supportUntil ? <> hasta <span suppressHydrationWarning>{new Date(c.supportUntil).toLocaleString('es')}</span></> : ''}.
       Concedido por la organización; su ingreso queda registrado en la auditoría de la organización. Sin acceso a expedientes ni biometría.</div>;
   }
   return <div className="ctxbar ctx-org">🏢 <b>{c.name}</b> · {c.roles.join(', ')}</div>;

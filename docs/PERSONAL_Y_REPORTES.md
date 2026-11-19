@@ -97,3 +97,27 @@ muestra en los teléfonos de las tiendas** (el teléfono solo recibe el roster d
 - Al purgar una organización eliminada (90 días) los archivos de `hr-documents` deben borrarse con la API de Storage (no desde SQL).
 - Si falla el registro de un documento tras subirlo, el archivo queda huérfano (no hay política de borrado en Storage).
 - Notificaciones de alertas por correo: estructura (`notify_admin_ids`) lista, sin envío.
+
+## Trabajos en segundo plano (Edge Function `background-jobs`)
+- pg_cron (`background-jobs`, cada 10 min) → pg_net → Edge Function con encabezado `x-jobs-secret` (secreto aleatorio en
+  Vault `jobs_secret`; nadie lo maneja). URL configurada en `private.app_config` (`functions_url`). Sin secreto: 403.
+- **Limpieza de Storage**: cola `private.storage_deletions`. Se encolan (a) todos los archivos de una organización al
+  borrarse definitivamente (purge_org) y (b) huérfanos del bucket `hr-documents` sin registro con más de 24 h (tarea
+  `storage-orphans`, 04:40 UTC). Antes de borrar se vuelve a verificar: si la organización existe o un documento usa el
+  archivo, se descarta sin borrar. Borrado con la API oficial (DELETE /storage/v1/object/{bucket}). Reintentos con espera
+  creciente; tras 10 intentos queda «gave_up_at» para revisión manual. Resumen de cada ejecución en la auditoría de plataforma.
+- **Correos de alertas**: Alertas › Avisos por correo (activar/desactivar y destinatarios: administradores de la
+  organización con acceso a alertas). Un correo por alerta y destinatario (sin duplicados); la 4.ª tardanza actualiza la
+  alerta sin otro correo. Contenido: empleado, tienda, cantidad y mes con enlace al panel; nada disciplinario. Registro
+  de cada intento (`alert_notifications`: pendiente, enviado, fallido tras 5 intentos, omitido). Envío por la API de Resend.
+  **Requiere configurar** los secretos `RESEND_API_KEY` y `ALERTS_FROM_EMAIL` de la Edge Function (Supabase › Edge
+  Functions › Secrets). Sin ellos, los correos quedan pendientes y las alertas siguen en el panel.
+
+## Pruebas
+- `scripts/test-db.sh`: migraciones + pruebas SQL (RLS, ciclo laboral, tardanzas, alertas, datos sensibles, colas).
+- `scripts/test-edge.sh`: Edge Functions (device-api, admin-invite, background-jobs contra Postgres local).
+- `scripts/test-kiosk-e2e.sh`: app de tienda + sincronización offline + bajas.
+- `scripts/test-admin-reports.sh`: reportes y horarios semanales con datos reales.
+- `scripts/test-panel-e2e.sh`: **navegador real** (Chromium) sobre el panel compilado, con PostgREST real y las políticas
+  RLS reales: propietario, administrador central, supervisora y auditor (25 pasos). Requiere Docker con la imagen
+  `postgrest/postgrest:v12.2.3`. La autenticación y Storage se simulan localmente (sin producción).

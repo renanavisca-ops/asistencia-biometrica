@@ -193,6 +193,11 @@ await as('admin@e2e.test', async (page) => {
     if (x.status() !== 200 || !x.headers()['content-type'].includes('spreadsheetml')) throw new Error('exportación: ' + x.status());
     await shot(page, '09-reporte');
   }, page);
+  await step('Admin cliente: permiso de enrolamiento con instrucciones claras', async () => {
+    await go(page, `/devices?org=${C1}`);
+    await page.locator('tr', { hasText: 'Tel T1' }).getByRole('button', { name: 'Permitir enrolar' }).click();
+    await expectText(page, 'Permiso de enrolamiento activado en «Tel T1»'); await expectText(page, 'No hace falta sincronizar');
+  }, page);
   await step('Admin cliente: concede acceso de soporte temporal al propietario', async () => {
     await go(page, `/privacy?org=${C1}`);
     await page.locator('input[name=reason]').first().fill('Revisión del horario semanal');

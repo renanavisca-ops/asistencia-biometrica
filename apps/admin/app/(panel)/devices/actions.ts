@@ -28,5 +28,8 @@ export async function setCanEnroll(fd: FormData) {
   const sb = await supabaseServer();
   const allowed = s(fd, 'allowed') === '1';
   const { error } = await sb.rpc('set_device_can_enroll', { p_device_id: s(fd, 'id'), p_allowed: allowed });
-  back('/devices', fd, error, allowed ? 'Permiso de enrolamiento activado (el teléfono lo verá al sincronizar)' : 'Permiso de enrolamiento retirado');
+  const label = s(fd, 'label') ?? 'el teléfono', active = s(fd, 'status') === 'active';
+  back('/devices', fd, error, !allowed ? `Permiso de enrolamiento retirado a «${label}»`
+    : active ? `Permiso de enrolamiento activado en «${label}». En ese teléfono: mantenga presionado 3 s el pie de pantalla → «Enrolamiento (administrador)». No hace falta sincronizar.`
+    : `Permiso guardado en «${label}», pero ese teléfono aún NO está activado: no podrá enrolar hasta que lo active con un código («Emitir código de activación»).`);
 }

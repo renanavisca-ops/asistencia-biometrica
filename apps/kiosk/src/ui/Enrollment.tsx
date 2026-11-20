@@ -16,8 +16,8 @@ const b64 = (v: Float32Array) => { let s = ''; for (const b of new Uint8Array(v.
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Modo enrolamiento (administrador): registro facial en la sede central de la organización del teléfono. Requiere internet. */
-export function Enrollment({ organizationId, onClose, getTicket }: {
-  organizationId: string; onClose: () => void;
+export function Enrollment({ organizationId, onClose, getTicket, deviceLabel: myLabel }: {
+  organizationId: string; onClose: () => void; deviceLabel?: string;
   /** Autorización del teléfono (firmada con su clave); el servidor la exige para enrolar. */
   getTicket: () => Promise<{ ok: true; ticket: string } | { ok: false; error: string }>;
 }) {
@@ -25,6 +25,12 @@ export function Enrollment({ organizationId, onClose, getTicket }: {
   const [step, setStep] = useState<Step>({ s: 'login' });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Al abrir se consulta al servidor si ESTE teléfono puede enrolar (sin esperar a la sincronización). */
+  const [gate, setGate] = useState<'checking' | 'ok' | { error: string }>('checking');
+  useEffect(() => {
+    getTicket().then((t) => setGate(t.ok ? 'ok' : { error: t.error }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   /** Tras iniciar sesión con MFA: liga la autorización del teléfono a la sesión del administrador. */
   const authorize = async () => {
@@ -46,8 +52,24 @@ export function Enrollment({ organizationId, onClose, getTicket }: {
     <div className="overlay" style={{ justifyContent: 'flex-start', paddingTop: 40, overflowY: 'auto', textAlign: 'center' }}>
       <h1>Enrolamiento facial</h1>
       <p className="muted" style={{ fontSize: 13, margin: 0 }}>Solo administradores. Motor EXPERIMENTAL (sface@2021dec + MiniFASNet). Requiere internet.</p>
+      {gate === 'checking' && <p>Comprobando el permiso de este teléfono…</p>}
+      {typeof gate === 'object' && (
+        <div style={{ textAlign: 'left', maxWidth: 520, margin: '12px auto' }}>
+          <p style={{ color: 'var(--err)', fontWeight: 700 }}>{gate.error === 'enroll_not_allowed'
+            ? `Este teléfono${myLabel ? ` (tienda «${myLabel}»)` : ''} no tiene permiso para enrolar.`
+            : gate.error === 'network_error' ? 'Sin conexión a internet: el enrolamiento la necesita.' : `No se pudo comprobar el permiso (${gate.error}).`}</p>
+          {gate.error === 'enroll_not_allowed' && (
+            <ol style={{ fontSize: 16 }}>
+              <li>En el panel web: menú <b>Teléfonos</b> → busque la fila de este teléfono{myLabel ? ` (sede «${myLabel}», estado Activo)` : ''} → <b>Permitir enrolar</b>.</li>
+              <li>Debe ser un teléfono <b>Activo</b>: en los que dicen «Pendiente de activar» el permiso no sirve hasta activarlos.</li>
+              <li>Vuelva a tocar <b>Enrolamiento</b> aquí (no hace falta sincronizar).</li>
+            </ol>
+          )}
+          <button className="btn" onClick={() => { setGate('checking'); getTicket().then((t) => setGate(t.ok ? 'ok' : { error: t.error })); }}>Comprobar de nuevo</button>
+        </div>
+      )}
       {err && <p style={{ color: 'var(--err)' }}>{err}</p>}
-      {step.s === 'login' && <Login sb={sb.current} busy={busy} setBusy={setBusy} setErr={setErr} onOk={(factorId) => (factorId ? setStep({ s: 'mfa', factorId }) : void authorize())} />}
+      {gate === 'ok' && step.s === 'login' && <Login sb={sb.current} busy={busy} setBusy={setBusy} setErr={setErr} onOk={(factorId) => (factorId ? setStep({ s: 'mfa', factorId }) : void authorize())} />}
       {step.s === 'mfa' && <Mfa sb={sb.current} factorId={step.factorId} setErr={setErr} onOk={() => void authorize()} />}
       {deviceLabel && step.s !== 'login' && step.s !== 'mfa' && <p className="muted" style={{ fontSize: 13, margin: 0 }}>Teléfono autorizado: {deviceLabel}</p>}
       {step.s === 'list' && <EmployeeList sb={sb.current} org={organizationId} setErr={setErr} onPick={(emp) => setStep({ s: 'prepare', emp })} />}
@@ -167,7 +189,7 @@ function Prepare({ sb, emp, setErr, onBack, onReady }: { sb: SupabaseClient; org
 }
 
 const dot = (a: Float32Array, b: Float32Array) => { let t = 0; for (let i = 0; i < a.length; i++) t += a[i]! * b[i]!; return t; };
-const MIN_CONSISTENCY = 0.5; // similitud mínima de cada muestra frontal con el promedio (provisional, Etapa 4)
+const MIN_CONSISTENCY = 0.7; // similitud mínima de cada muestra frontal con el promedio (medido: misma persona ≈ 0,8–0,9; distinta ≤ 0,47)
 const MIN_POSE_SIM = 0.25;   // las muestras de perfil deben parecerse a la frontal (misma persona); provisional
 const STEP_TIMEOUT_MS = 20_000;
 const YAW_DELTA = 0.08, PITCH_DELTA = 0.05;

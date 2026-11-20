@@ -35,9 +35,11 @@ export default async function Devices({ searchParams }: { searchParams: SP }) {
               <td><span className={`badge ${d.status === 'active' ? 'ok' : d.status === 'pending' ? 'warn' : 'err'}`}>{ST[d.status]}</span>{d.blocked_reason && <div className="muted">{d.blocked_reason}</div>}</td>
               <td>
                 {d.can_enroll ? <span className="badge ok">Sí</span> : <span className="badge">No</span>}
+                {d.can_enroll && d.status !== 'active' && <div className="muted" style={{ fontSize: 12 }}>no funciona hasta activar el teléfono</div>}
                 {manage && d.status !== 'retired' && (
                   <form action={setCanEnroll} style={{ marginTop: 4 }}><OrgField org={org.id} /><input type="hidden" name="id" value={d.id} />
                     <input type="hidden" name="allowed" value={d.can_enroll ? '0' : '1'} />
+                    <input type="hidden" name="label" value={d.label} /><input type="hidden" name="status" value={d.status} />
                     <button className={d.can_enroll ? 'danger' : 'secondary'} style={{ padding: '3px 8px', fontSize: 13 }}>{d.can_enroll ? 'Quitar permiso' : 'Permitir enrolar'}</button>
                   </form>
                 )}

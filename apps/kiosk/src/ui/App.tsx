@@ -209,7 +209,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
       {footer}
       {diag && <EngineDiagnostics onClose={() => setDiag(false)} />}
       {validation && st && <BiometricValidation svc={svc} roster={roster} policy={st.policy} onClose={() => setValidation(false)} />}
-      {enroll && st && <Enrollment organizationId={st.organizationId} getTicket={() => svc.enrollTicket()} onClose={() => { setEnroll(false); runSync(); }} />}
+      {enroll && st && <Enrollment organizationId={st.organizationId} deviceLabel={st.storeName} getTicket={() => svc.enrollTicket()} onClose={() => { setEnroll(false); runSync(); }} />}
       {admin && st && (
         <div className="overlay" role="dialog" aria-label="Estado del dispositivo">
           <h1>Estado del teléfono</h1>
@@ -227,9 +227,8 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
           <button className="btn primary" onClick={runSync}>Sincronizar ahora</button>
           <button className="btn" onClick={() => { setAdmin(false); setDiag(true); }}>Diagnóstico del motor</button>
           <button className="btn" onClick={() => { setAdmin(false); setValidation(true); }}>Validación biométrica (pruebas con personas)</button>
-          {st.canEnroll
-            ? <button className="btn" onClick={() => { setAdmin(false); setEnroll(true); }}>Enrolamiento (administrador)</button>
-            : <p className="muted" style={{ fontSize: 14 }}>Este teléfono no tiene permiso de enrolamiento (se activa en el panel: Teléfonos → «Puede enrolar»; luego toque Sincronizar).</p>}
+          {/* Siempre visible: al abrir, el servidor confirma el permiso en ese momento y, si falta, explica cómo darlo. */}
+          <button className="btn" onClick={() => { setAdmin(false); setEnroll(true); }}>Enrolamiento (administrador){st.canEnroll ? '' : ' — requiere permiso'}</button>
           <button className="btn small" onClick={() => setAdmin(false)}>Cerrar</button>
         </div>
       )}

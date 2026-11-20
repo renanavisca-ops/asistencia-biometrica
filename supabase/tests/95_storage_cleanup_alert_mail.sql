@@ -116,3 +116,9 @@ select test.as_user(:CA);
 select test.ok((select count(*) from public.alert_notifications) = 3, 'la administración ve su registro de envíos');
 select test.reset();
 \echo 'Pruebas de limpieza de archivos y correos de alertas superadas'
+
+-- Umbrales seguros: ninguna organización queda con una política vigente por debajo de 0,62 / 0,12.
+select test.ok(not exists (select 1 from public.device_policy_versions p
+  where p.version = (select max(version) from public.device_policy_versions x where x.organization_id = p.organization_id)
+    and p.policy ? 'matchThreshold' and ((p.policy ->> 'matchThreshold')::numeric < 0.62 or (p.policy ->> 'matchMargin')::numeric < 0.12)),
+  'políticas vigentes con umbral ≥ 0,62 y margen ≥ 0,12');

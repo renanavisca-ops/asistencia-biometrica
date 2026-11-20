@@ -33,6 +33,19 @@ export function cosine(a: Float32Array, b: Float32Array): number {
   return s;
 }
 
+/** Cantidad de plantillas por persona que se promedian: una sola muestra mala o de perfil no basta para coincidir. */
+export const TOP_K_TEMPLATES = 3;
+
+/**
+ * Puntuación de una persona: promedio de las K plantillas más parecidas (no la mejor sola). Con 9 plantillas por
+ * persona (frente y perfiles), tomar solo la mejor deja que un desconocido «se parezca» a una muestra mala o de perfil.
+ */
+export function personScore(probe: Float32Array, templates: Float32Array[], k = TOP_K_TEMPLATES): number {
+  const s = templates.map((t) => cosine(probe, t)).sort((a, b) => b - a);
+  const top = s.slice(0, Math.max(1, Math.min(k, s.length)));
+  return top.reduce((a, b) => a + b, 0) / top.length;
+}
+
 export function matchOneToN(params: {
   probe: Float32Array; // L2-normalizado
   probeModelVersion: string;
@@ -47,12 +60,9 @@ export function matchOneToN(params: {
   const perEmployee: { id: string; score: number }[] = [];
   for (const g of gallery) {
     if (g.modelVersion !== params.probeModelVersion) return { kind: 'error', reason: 'model_mismatch' };
-    let best = -Infinity;
-    for (const t of g.templates) {
-      if (t.length !== probe.length) return { kind: 'error', reason: 'dimension_mismatch' };
-      best = Math.max(best, cosine(probe, t));
-    }
-    if (best > -Infinity) perEmployee.push({ id: g.employeeId, score: best });
+    if (!g.templates.length) continue;
+    if (g.templates.some((t) => t.length !== probe.length)) return { kind: 'error', reason: 'dimension_mismatch' };
+    perEmployee.push({ id: g.employeeId, score: personScore(probe, g.templates) });
   }
   perEmployee.sort((a, b) => b.score - a.score);
   const top = perEmployee[0];

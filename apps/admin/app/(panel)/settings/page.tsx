@@ -37,7 +37,7 @@ export default async function Settings({ searchParams }: { searchParams: SP }) {
             <label>Umbral prueba de vida pasiva (prob. «real», 0–1)<input name="padThreshold" type="number" step="0.0001" defaultValue={current.padThreshold ?? ''} /></label>
             <div className="muted" style={{ gridColumn: '1 / -1', fontSize: 12 }}>
               Motor gratuito EXPERIMENTAL (sface@2021dec + MiniFASNet). Sin calibrar con datos propios. Valores <b>provisionales solo para pruebas</b>:
-              coincidencia 0.40, margen 0.08, prueba de vida 0.80. Se reemplazarán por los calibrados con voluntarios (Etapa 4).
+              coincidencia 0.62, margen 0.12, prueba de vida 0.80 (con 0.40 un desconocido fue aceptado como otra persona). Afínelos con «Validación biométrica».
               Mientras estén vacíos, los teléfonos <b>no reconocen a nadie</b> (por diseño).
             </div>
             <div><button>Publicar nueva versión</button></div>

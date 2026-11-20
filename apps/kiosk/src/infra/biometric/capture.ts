@@ -1,4 +1,4 @@
-import { cosine, type DevicePolicy, type MatchResult, type RosterEntry } from '@asistencia/core';
+import { cosine, personScore, type DevicePolicy, type MatchResult, type RosterEntry } from '@asistencia/core';
 import { ActiveChallenge, CHALLENGE_TEXT, randomChallenge, type ChallengeKind } from './activeChallenge.ts';
 import { FreeFaceRecognitionAdapter } from './freeEngine.ts';
 import { QUALITY_MESSAGE } from './quality.ts';
@@ -150,11 +150,20 @@ export async function runCapture(o: CaptureOptions): Promise<{ outcome: CaptureO
 
   // Puntuaciones de todos los candidatos (para medir FAR/FRR con distintos umbrales), aunque luego se rechace.
   const probe = FreeFaceRecognitionAdapter.average([A.emb, B.emb]);
-  const ranked = gallery.map((g) => ({ id: g.employeeId, s: Math.max(...g.templates.map((t) => cosine(probe, t))) })).sort((x, y) => y.s - x.s);
+  const rank = (p: Float32Array) => gallery.map((g) => ({ id: g.employeeId, s: personScore(p, g.templates) })).sort((x, y) => y.s - x.s);
+  const ranked = rank(probe);
   m.top1EmployeeId = ranked[0]?.id ?? null; m.top1Score = ranked[0]?.s ?? null; m.top2Score = ranked[1]?.s ?? null;
 
   if (passive < policy.padThreshold) return done({ kind: 'liveness_failed', reason: 'passive', score: passive, threshold: policy.padThreshold });
   const r: MatchResult = eng.identify(probe, roster, policy);
+  // Doble confirmación: las capturas de antes y después del desafío deben identificar, cada una por separado, a la MISMA
+  // persona por encima del umbral. Un parecido casual en una sola captura no basta para marcar a nombre de otro.
+  if (r.kind === 'match' && B !== A) {
+    const ra = rank(A.emb)[0], rb = rank(B.emb)[0];
+    if (!ra || !rb || ra.id !== r.employeeId || rb.id !== r.employeeId || ra.s < policy.matchThreshold || rb.s < policy.matchThreshold) {
+      return done({ kind: 'not_recognized', bestScore: Math.min(ra?.s ?? 0, rb?.s ?? 0) });
+    }
+  }
   if (r.kind === 'match') {
     return done({ kind: 'identified', id: { employeeId: r.employeeId, matchScore: r.score, matchMargin: r.margin, padScore: passive,
       recognitionModel: eng.modelVersion, padModel: `${eng.padModel}${m.challengeKind ? `+active:${m.challengeKind}` : '+passive-only'}` } });

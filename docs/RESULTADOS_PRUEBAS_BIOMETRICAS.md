@@ -40,8 +40,16 @@ capturas distintas de la misma persona.
 ### Datos reales disponibles hoy
 | Fuente | n | Resultado |
 |---|---|---|
-| Marcaciones biométricas reales en producción (HONOR, tienda, 2026-11-09) | **1** | Reconocimiento correcto: similitud 0,764, margen 0,445, pasiva 0,940, desafío parpadeo |
-Con n = 1 **no se puede calcular ninguna tasa** (FRR, FAR, APCER, BPCER). La Fase 4 no se declara terminada.
+| Marcación real de empleada enrolada (HONOR, tienda, 2026-11-09) | 1 | ✅ Reconocimiento correcto: similitud 0,764, margen 0,445, pasiva 0,940, desafío parpadeo |
+| **Persona NO enrolada** (hombre, Samsung SM-S721B, 2026-11-20) | 1 | ❌ **Aceptado como una empleada** (similitud 0,538, margen 0,10) con los umbrales provisionales 0,40 / 0,08 |
+| Comparación entre las 27 plantillas enroladas (3 personas × 9) | 27 sondas propias, 54 ajenas | Misma persona: promedio 0,886 (mín. 0,41 por una muestra mala); personas distintas: promedio 0,290, **máximo 0,465** |
+
+**Corrección aplicada (2026-11-20, app 0.7.1 y política v2):** umbral 0,62 y margen 0,12 (por encima del máximo medido entre
+personas distintas y del caso aceptado por error); la puntuación de cada persona es el **promedio de sus 3 plantillas más
+parecidas** (antes la mejor sola, lo que dejaba coincidir con una muestra mala o de perfil); **doble confirmación** (las
+capturas antes y después del desafío deben identificar por separado a la misma persona); y en el enrolamiento las muestras
+de frente deben tener consistencia ≥ 0,70 (antes 0,50). Una de las empleadas (Astri) tiene 2 plantillas de baja calidad: se
+recomienda reenrolarla. Con n tan pequeño **no se puede calcular ninguna tasa** (FRR, FAR, APCER, BPCER). La Fase 4 no se declara terminada.
 
 ### Cómo se mide (herramienta lista en la app 0.7.0 y el panel)
 1. En el teléfono de la tienda: mantener presionado 3 s el pie de pantalla → **Validación biométrica**. Este modo ejecuta la

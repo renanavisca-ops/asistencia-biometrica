@@ -42,4 +42,15 @@ describe('matchOneToN', () => {
   it('rechaza plantillas de otro modelo', () => {
     expect(matchOneToN({ probe: v(1, 0, 0), probeModelVersion: 'm@2', gallery, threshold: 0.5, minMargin: 0.1 })).toEqual({ kind: 'error', reason: 'model_mismatch' });
   });
+
+  it('una sola plantilla parecida no basta: se promedian las 3 mejores', () => {
+    // Persona A: 1 plantilla mala/de perfil muy parecida al desconocido y 2 buenas muy distintas.
+    const probe = v(1, 0, 0);
+    const gallery = [{ employeeId: 'a', modelVersion: 'm@1', templates: [v(0.99, 0.1, 0), v(0, 1, 0), v(0, 0, 1)] }];
+    const r = matchOneToN({ probe, probeModelVersion: 'm@1', gallery, threshold: 0.62, minMargin: 0.12 });
+    expect(r.kind).toBe('no_match');
+    // La misma persona con plantillas consistentes sí coincide.
+    const ok = matchOneToN({ probe, probeModelVersion: 'm@1', gallery: [{ employeeId: 'a', modelVersion: 'm@1', templates: [v(1, 0.05, 0), v(1, 0, 0.05), v(1, 0.02, 0.02)] }], threshold: 0.62, minMargin: 0.12 });
+    expect(ok).toMatchObject({ kind: 'match', employeeId: 'a' });
+  });
 });

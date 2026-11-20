@@ -24,3 +24,4 @@ apps/kiosk/public/vendor/
 apps/kiosk/dist-biotest/
 apps/kiosk/dist-e2e/
 apps/admin/e2e/screenshots/
+apps/kiosk/face-e2e-validation.png

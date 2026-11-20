@@ -52,7 +52,7 @@ de frente deben tener consistencia ≥ 0,70 (antes 0,50). Una de las empleadas (
 recomienda reenrolarla. Con n tan pequeño **no se puede calcular ninguna tasa** (FRR, FAR, APCER, BPCER). La Fase 4 no se declara terminada.
 
 ### Cómo se mide (herramienta lista en la app 0.7.0 y el panel)
-1. En el teléfono de la tienda: mantener presionado 3 s el pie de pantalla → **Validación biométrica**. Este modo ejecuta la
+1. En el teléfono de la tienda: botón **⚙ Opciones** (abajo a la derecha) → **Validación biométrica**. Este modo ejecuta la
    misma cadena que la marcación pero **no registra asistencia** ni guarda fotos.
 2. Para cada intento elegir la condición (persona enrolada y quién es, persona no enrolada, foto impresa, foto en pantalla,
    vídeo en pantalla, otro), la luz y la prueba de vida (parpadeo, aleatoria o solo pasiva) y tocar «Iniciar intento».

@@ -45,9 +45,10 @@ que reconoce el rostro, funciona **sin internet** y sincroniza después. Tiene t
 - Altas, **bajas, traslados y revocaciones** se aplican en la siguiente sincronización (un empleado dado de baja deja de
   poder marcar; un traslado no requiere volver a registrar el rostro).
 
-### Modos para el encargado o administrador (mantener presionado 3 s el pie de pantalla)
+### Modos para el encargado o administrador (botón «⚙ Opciones», abajo a la derecha)
 - **Estado del teléfono**: tienda, última sincronización, pendientes, personas autorizadas, versión de política, motor.
-- **Enrolamiento (registro del rostro)**: solo en teléfonos autorizados en el panel y con autorización de un
+- **Enrolamiento (registro del rostro)**: botón «👤 Registrar rostro» visible en la pantalla principal de los teléfonos con
+  permiso (también en ⚙ Opciones). Solo en teléfonos autorizados en el panel y con autorización de un
   administrador. Guía de 6 pasos, verificación del documento de identidad, varias muestras con control de calidad,
   prueba de vida y comprobación de **rostros duplicados** en toda la empresa. No se guardan fotos, solo plantillas cifradas.
 - **Diagnóstico del motor**: compara dos capturas y muestra similitud, calidad y tiempos.

@@ -66,11 +66,43 @@ await page.fill('input', 'face-2345-face'); await page.click('button:has-text("A
 await page.waitForSelector('text=Toque la pantalla', { timeout: 30000 }).catch(async (e) => { console.error('PANTALLA:', (await page.textContent('body'))?.slice(0, 600)); throw e; });
 await page.waitForTimeout(3000); // sincronización inicial (roster con plantillas)
 
+// ENROLL_UI=1: botón de enrolamiento visible y mensajes de permiso (con la API real del dispositivo).
+if (process.env.ENROLL_UI) {
+  const res = {};
+  // Sin permiso: no hay botón en la pantalla principal; desde ⚙ Opciones se explica por qué no puede enrolar.
+  res.sinPermisoBoton = await page.locator('text=Registrar rostro (administrador)').count();
+  await page.click('text=⚙ Opciones');
+  await page.click('text=/^Enrolamiento \\(administrador\\)/');
+  await page.waitForSelector('text=/no tiene permiso para enrolar/', { timeout: 30000 });
+  res.mensaje = (await page.textContent('text=/no tiene permiso para enrolar/')).trim();
+  // Se da el permiso en el panel (aquí directo en la base) y se comprueba de nuevo sin sincronizar.
+  await sql`update public.devices set can_enroll = true where id = ${DEV}`;
+  await page.click('text=Comprobar de nuevo');
+  await page.waitForSelector('input[type=email]', { timeout: 30000 }); // formulario de inicio de sesión del administrador
+  res.loginTrasPermiso = true;
+  await page.click('text=Salir del modo enrolamiento');
+  await page.waitForSelector('text=Toque la pantalla', { timeout: 30000 });
+  await page.click('text=⚙ Opciones'); await page.click('text=Sincronizar ahora'); await page.waitForTimeout(3000);
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await page.waitForSelector('text=Registrar rostro (administrador)', { timeout: 30000 });
+  await page.click('text=Registrar rostro (administrador)');
+  await page.waitForSelector('input[type=email]', { timeout: 30000 });
+  res.botonPrincipalAbreLogin = true;
+  await page.screenshot({ path: process.env.SHOT ?? 'face-e2e-enroll.png' });
+  const [{ n }] = await sql`select count(*)::int n from private.enroll_tickets where device_id = ${DEV}`;
+  await browser.close(); await new Promise((r) => server.httpServer.close(r)); await sql.end();
+  console.log(JSON.stringify({ ...res, ticketsEmitidos: n }, null, 1));
+  const ok = res.sinPermisoBoton === 0 && /no tiene permiso para enrolar/.test(res.mensaje) && res.loginTrasPermiso && res.botonPrincipalAbreLogin && n >= 2;
+  console.log(ok ? 'OK: sin permiso explica el motivo; con permiso el botón «Registrar rostro» aparece en la pantalla principal y abre el inicio de sesión del administrador'
+    : 'FALLO: enrolamiento desde la pantalla principal');
+  process.exit(ok ? 0 : 1);
+}
+
 // VALIDATION=1: modo validación biométrica (misma cadena, sin asistencia). Intento 1: persona enrolada (solo pasiva: la
 // cámara simulada es una imagen fija y no puede parpadear). Intento 2: la misma imagen como «foto impresa» con desafío de
 // parpadeo → debe detenerla la prueba de vida. Los intentos se envían al servidor; no debe crearse ninguna marcación.
 if (process.env.VALIDATION) {
-  await page.locator('.footer').dispatchEvent('pointerdown'); await page.waitForTimeout(3300);
+  await page.click('text=⚙ Opciones');
   await page.click('text=Validación biométrica (pruebas con personas)');
   const result = () => Promise.race(['Reconocido', 'No reconocido', 'Prueba de vida no superada', 'Tiempo agotado', 'Dudoso', 'Sin calibrar']
     .map((t) => page.waitForSelector(`b:text-is("${t}"), b:text-matches("^${t}:")`, { timeout: 60000 }).then(async (h) => (await h.textContent()).trim())));

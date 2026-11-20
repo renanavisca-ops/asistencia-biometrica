@@ -52,7 +52,7 @@ export default async function Biometrics({ searchParams }: { searchParams: SP })
       </form>
       {error && <div className="msg error">{error.message}</div>}
       {!trials.length ? (
-        <div className="card"><p>Aún no hay pruebas registradas. En el teléfono: mantenga presionado 3 s el pie de pantalla → <b>Validación biométrica</b>.
+        <div className="card"><p>Aún no hay pruebas registradas. En el teléfono: botón <b>⚙ Opciones</b> (abajo a la derecha) → <b>Validación biométrica</b>.
           Protocolo sugerido en docs/RESULTADOS_PRUEBAS_BIOMETRICAS.md (al menos 10 personas, 10 intentos cada una, y 20 intentos por tipo de ataque).</p></div>
       ) : (
         <>

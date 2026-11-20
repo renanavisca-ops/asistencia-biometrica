@@ -26,7 +26,7 @@
 **Lo que NO se ha probado todavía:** fotos impresas, fotos en pantallas y vídeos reales delante de la cámara del teléfono. Eso solo puede medirse físicamente.
 
 ## Protocolo de prueba en el teléfono (pendiente de ejecutar)
-Usar **Diagnóstico del motor** (estado del encargado → pulsación larga 3 s en el pie de pantalla). No guarda imágenes.
+Usar **Diagnóstico del motor** (botón «⚙ Opciones» en el pie de pantalla). No guarda imágenes.
 Para cada condición, 10 capturas, anotando «REAL (pasiva)» y si «Probar desafío» se cumple:
 | Condición | Esperado |
 |---|---|

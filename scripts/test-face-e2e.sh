@@ -44,5 +44,6 @@ CAM=b run "Solo pasiva → reconoce B" EXPECT="Persona Beta" POLICY='{"matchThre
 CAM=a run "No enrolado → rechazo" NEGATIVE=1 POLICY='{"matchThreshold":0.4,"matchMargin":0.08,"padThreshold":0.8,"activeChallenge":0}'
 CAM=a run "Umbral pasivo imposible (0.9999) → prueba de vida fallida" EXPECT_OUTCOME=PRUEBA_DE_VIDA_FALLIDA POLICY='{"matchThreshold":0.4,"matchMargin":0.08,"padThreshold":0.9999,"activeChallenge":0}'
 CAM=a run "Sin umbrales publicados → sin calibrar" EXPECT_OUTCOME=SIN_CALIBRAR POLICY='{"minSessionMinutes":30}'
+CAM=a run "Enrolamiento: mensaje sin permiso y botón en la pantalla principal con permiso" ENROLL_UI=1
 CAM=a run "Modo validación: persona enrolada + foto estática como ataque + 1:N, sin crear asistencia" VALIDATION=1
 CAM=a run "Política 2 (desafío aleatorio) con foto estática → debe rechazarse" EXPECT_OUTCOME=PRUEBA_DE_VIDA_FALLIDA POLICY='{"matchThreshold":0.4,"matchMargin":0.08,"padThreshold":0.8,"activeChallenge":2,"challengeTimeoutSec":6}'

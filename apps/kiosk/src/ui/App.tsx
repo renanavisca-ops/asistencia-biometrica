@@ -131,10 +131,9 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   };
 
   const footer = st && (
-    <div className="footer" onContextMenu={(e) => e.preventDefault()}
-      onPointerDown={(e) => { const t = setTimeout(() => setAdmin(true), 3000); const up = () => { clearTimeout(t); e.currentTarget?.removeEventListener('pointerup', up); }; e.currentTarget.addEventListener('pointerup', up); }}>
-      <span>{st.storeName}</span>
-      <span>{counts?.pending ? `${counts.pending} pendientes` : 'al día'} · v{st.policy.version} · ⚙ mantener 3 s</span>
+    <div className="footer" onContextMenu={(e) => e.preventDefault()}>
+      <span>{st.storeName} · {counts?.pending ? `${counts.pending} pendientes` : 'al día'} · v{st.policy.version}</span>
+      <button className="btn small" style={{ minHeight: 0, padding: '6px 12px', fontSize: 15 }} onClick={() => setAdmin(true)} aria-label="Opciones del teléfono">⚙ Opciones</button>
     </div>
   );
 
@@ -173,6 +172,10 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
           <div className="big">Toque la pantalla</div>
           <p className="muted">Mire a la cámara cuando se abra. No necesita escribir nada.</p>
         </button>
+      )}
+      {view.name === 'home' && st?.canEnroll && (
+        <button className="btn" style={{ position: 'fixed', left: 16, right: 16, bottom: 64, fontSize: 20, minHeight: 56, background: '#1f6feb', color: '#fff', zIndex: 5 }}
+          onClick={() => setEnroll(true)} aria-label="Registrar rostro de un empleado (administrador)">👤 Registrar rostro (administrador)</button>
       )}
       {view.name === 'capture' && st && (
         <div className="screen" style={{ paddingTop: 84, justifyContent: 'flex-start' }}>

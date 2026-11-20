@@ -40,3 +40,29 @@ La combinación **pasiva + activa aleatoria** es la mejor opción gratuita, pero
 Funcionalidades que aportan valor a Asistencia Tienda y que ya tenemos o planificamos: quiosco compartido, offline real, anti-suplantación, geocercas NO necesarias (teléfono fijo por tienda), reportes por jornada, alertas de intentos fallidos.
 
 Fuentes: pypi.org/project/insightface · huggingface.co/Idiap/EdgeFace-Base · github.com/opencv/opencv_zoo (face_recognition_sface) · github.com/minivision-ai/Silent-Face-Anti-Spoofing · developers.google.com/edge/mediapipe/solutions/vision/face_landmarker · microsoft.com/en-us/research/publication/digiface-1m · jibble.io/best-software/facial-recognition-time-tracking-software · wappblaster.com/vs/truein
+
+## Revisión 2026-11-20 (Fase 4) — selección vigente y por qué
+**Combinación seleccionada (gratuita, ya integrada y funcionando en Android):**
+MediaPipe Face Landmarker (detección + puntos + parpadeo) · SFace 128-d (reconocimiento) · MiniFASNet V2+V1SE (prueba pasiva)
+· desafío activo (parpadeo o aleatorio) · ONNX Runtime Web + MediaPipe WASM como tiempo de ejecución.
+
+Motivos: (1) todo corre sin red en la WebView con el **mismo código para Android e iOS** (no requiere módulos nativos por
+plataforma); (2) es la única combinación encontrada con licencias de **código y pesos** que permiten al menos la validación
+(los pesos de InsightFace/ArcFace y EdgeFace son no comerciales); (3) tamaño total ≈ 46 MB de modelos (SFace 38,7 MB,
+MediaPipe 3,8 MB, MiniFASNet 2 × 1,7 MB), aceptable para un teléfono de tienda; (4) ya validada de extremo a extremo
+(docs/RESULTADOS_PRUEBAS_BIOMETRICAS.md).
+
+**Alternativas evaluadas y no adoptadas ahora:**
+- *MobileFaceNet en TensorFlow Lite*: el obstáculo no es el formato (TFLite u ONNX) sino los **pesos**: los publicados
+  están entrenados mayoritariamente con MS1M (retirado/no comercial) o sin procedencia. Cambiar de formato no resuelve la licencia.
+- *Módulo nativo (Kotlin/Swift) con TFLite/ONNX Runtime Mobile*: más rápido en teléfonos de gama media, pero duplica el
+  trabajo por plataforma. Se reconsiderará solo si las mediciones reales en el teléfono muestran tiempos inaceptables.
+- *Google ML Kit*: detección gratuita y cerrada; no identifica personas.
+
+**Limitaciones conocidas del motor gratuito:** procedencia de datos de SFace no verificada; licencia de pesos de MiniFASNet
+no explícita (docs/LICENCIAS_BIOMETRICAS.md); prueba de vida no certificada; un vídeo de la persona puede superar el
+desafío de parpadeo (por eso existe el modo aleatorio y la prueba pasiva); sin protección contra cámaras virtuales en
+teléfonos rooteados ni deepfakes en tiempo real.
+
+Fuentes adicionales: [SFace, arXiv 2205.12010](https://arxiv.org/abs/2205.12010) ·
+[índice de pesos UniFace](https://huggingface.co/yakhyo/uniface-weights) · [face-antispoof-onnx](https://github.com/suriAI/face-antispoof-onnx)

@@ -35,7 +35,7 @@ run() { # nombre, variables...
   ( cd "$ROOT/supabase/functions/device-api" && DATABASE_URL=postgres://postgres@127.0.0.1:$PORT/postgres exec "$DENO" run --allow-net --allow-env --allow-read serve_local.ts ) >"$W/deno.log" 2>&1 & DPID=$!
   for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8787/device-api/x && break; sleep 0.5; done
   echo "── $name"
-  env DATABASE_URL=postgres://postgres@127.0.0.1:$PORT/postgres DEVICE_API=http://127.0.0.1:8787 "$@" node face-e2e.mjs "$W/cam_${CAM:-a}.y4m" "$W/tpl.json" | grep -E "^OK|FALLO|outcome|elapsed"
+  env DATABASE_URL=postgres://postgres@127.0.0.1:$PORT/postgres DEVICE_API=http://127.0.0.1:8787 "$@" node face-e2e.mjs "$W/cam_${CAM:-a}.y4m" "$W/tpl.json" | grep -E "^OK|FALLO|outcome|elapsed|\"r[12]\"|ms[12]|bench|detail1"
   kill $DPID 2>/dev/null || true; wait $DPID 2>/dev/null || true
 }
 CAM=a run "Foto estática con desafío activo → debe rechazarse" EXPECT_OUTCOME=PRUEBA_DE_VIDA_FALLIDA
@@ -44,3 +44,5 @@ CAM=b run "Solo pasiva → reconoce B" EXPECT="Persona Beta" POLICY='{"matchThre
 CAM=a run "No enrolado → rechazo" NEGATIVE=1 POLICY='{"matchThreshold":0.4,"matchMargin":0.08,"padThreshold":0.8,"activeChallenge":0}'
 CAM=a run "Umbral pasivo imposible (0.9999) → prueba de vida fallida" EXPECT_OUTCOME=PRUEBA_DE_VIDA_FALLIDA POLICY='{"matchThreshold":0.4,"matchMargin":0.08,"padThreshold":0.9999,"activeChallenge":0}'
 CAM=a run "Sin umbrales publicados → sin calibrar" EXPECT_OUTCOME=SIN_CALIBRAR POLICY='{"minSessionMinutes":30}'
+CAM=a run "Modo validación: persona enrolada + foto estática como ataque + 1:N, sin crear asistencia" VALIDATION=1
+CAM=a run "Política 2 (desafío aleatorio) con foto estática → debe rechazarse" EXPECT_OUTCOME=PRUEBA_DE_VIDA_FALLIDA POLICY='{"matchThreshold":0.4,"matchMargin":0.08,"padThreshold":0.8,"activeChallenge":2,"challengeTimeoutSec":6}'

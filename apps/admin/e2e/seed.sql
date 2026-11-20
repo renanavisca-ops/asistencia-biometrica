@@ -62,3 +62,27 @@ select public.recompute_tardiness('e2e10000-0000-4000-8000-000000000002', '2026-
 select public.terminate_employee('e2e40000-0000-4000-8000-000000000002', 'dismissal', current_date, 'Faltante de mercadería comprobado en inventario',
   'Se entregó carta', 'Confidencial', null);
 commit;
+
+-- Intentos del modo validación biométrica (como los enviaría el teléfono T1).
+set role service_role;
+select private.ingest_biometric_trials('e2e50000-0000-4000-8000-000000000001', jsonb_build_array(
+  jsonb_build_object('id', gen_random_uuid(), 'sessionId', 'e2e80000-0000-4000-8000-000000000001', 'capturedAt', now(), 'condition', 'genuine',
+    'expectedEmployeeId', 'e2e40000-0000-4000-8000-000000000001', 'identifiedEmployeeId', 'e2e40000-0000-4000-8000-000000000001', 'outcome', 'identified',
+    'challengeMode', 'blink', 'lighting', 'normal', 'metrics', jsonb_build_object('totalMs', 2300, 'top1EmployeeId', 'e2e40000-0000-4000-8000-000000000001',
+    'top1Score', 0.71, 'top2Score', 0.18, 'passiveScore', 0.95, 'detectMs', 95, 'embedMs', 60, 'padMs', 45), 'device', jsonb_build_object('memoryMb', 180, 'battery', 0.9)),
+  jsonb_build_object('id', gen_random_uuid(), 'sessionId', 'e2e80000-0000-4000-8000-000000000001', 'capturedAt', now(), 'condition', 'genuine',
+    'expectedEmployeeId', 'e2e40000-0000-4000-8000-000000000001', 'identifiedEmployeeId', 'e2e40000-0000-4000-8000-000000000001', 'outcome', 'identified',
+    'challengeMode', 'blink', 'lighting', 'low', 'metrics', jsonb_build_object('totalMs', 2900, 'top1EmployeeId', 'e2e40000-0000-4000-8000-000000000001',
+    'top1Score', 0.58, 'top2Score', 0.21, 'passiveScore', 0.88), 'device', jsonb_build_object('memoryMb', 190, 'battery', 0.88)),
+  jsonb_build_object('id', gen_random_uuid(), 'sessionId', 'e2e80000-0000-4000-8000-000000000001', 'capturedAt', now(), 'condition', 'genuine',
+    'expectedEmployeeId', 'e2e40000-0000-4000-8000-000000000001', 'outcome', 'liveness_failed', 'outcomeReason', 'passive', 'challengeMode', 'blink',
+    'lighting', 'backlight', 'metrics', jsonb_build_object('totalMs', 3100, 'passiveScore', 0.62)),
+  jsonb_build_object('id', gen_random_uuid(), 'sessionId', 'e2e80000-0000-4000-8000-000000000001', 'capturedAt', now(), 'condition', 'impostor',
+    'outcome', 'not_recognized', 'challengeMode', 'blink', 'lighting', 'normal', 'metrics', jsonb_build_object('totalMs', 2500,
+    'top1EmployeeId', 'e2e40000-0000-4000-8000-000000000004', 'top1Score', 0.22, 'top2Score', 0.1, 'passiveScore', 0.93)),
+  jsonb_build_object('id', gen_random_uuid(), 'sessionId', 'e2e80000-0000-4000-8000-000000000001', 'capturedAt', now(), 'condition', 'attack_print',
+    'outcome', 'liveness_failed', 'outcomeReason', 'challenge_timeout', 'challengeMode', 'blink', 'lighting', 'normal', 'metrics', jsonb_build_object('passiveScore', 0.41)),
+  jsonb_build_object('id', gen_random_uuid(), 'sessionId', 'e2e80000-0000-4000-8000-000000000001', 'capturedAt', now(), 'condition', 'benchmark',
+    'outcome', 'benchmark', 'metrics', jsonb_build_object('templatesPerEmployee', 3), 'benchmark', jsonb_build_object('msByGallerySize', jsonb_build_object('n100', 0.4, 'n1000', 3.9)))
+)) = 6;
+reset role;

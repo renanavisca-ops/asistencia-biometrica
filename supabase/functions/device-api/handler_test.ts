@@ -54,7 +54,7 @@ async function seed() {
   });
 }
 
-async function signedCall(route: 'push' | 'pull' | 'enroll-ticket', body: unknown, privateKey: string, deviceId = DEV) {
+async function signedCall(route: 'push' | 'pull' | 'enroll-ticket' | 'trials', body: unknown, privateKey: string, deviceId = DEV) {
   const ch = await (await call('challenge', { deviceId })).json();
   const text = JSON.stringify(body);
   const sig = signRequest('POST', route, ch.challenge, text, privateKey);
@@ -138,6 +138,26 @@ Deno.test('flujo completo del dispositivo', async (t) => {
   await t.step('salud del dispositivo registrada', async () => {
     const [{ n }] = await sql`select count(*)::int n from public.device_health where device_id = ${DEV}`;
     assert(n >= 2, 'device_health');
+  });
+  await t.step('validación biométrica: intentos guardados sin crear asistencia; sin firma → 401; idempotente', async () => {
+    const session = crypto.randomUUID();
+    const trial = (cond: string, extra: Record<string, unknown> = {}) => ({ id: crypto.randomUUID(), sessionId: session, capturedAt: new Date().toISOString(),
+      condition: cond, outcome: 'identified', challengeMode: 'blink', lighting: 'normal', identifiedEmployeeId: EMP, expectedEmployeeId: EMP,
+      metrics: { totalMs: 2100.4, top1EmployeeId: EMP, top1Score: 0.71, top2Score: 0.2, passiveScore: 0.93, challengePassed: true, gallerySize: 1 },
+      thresholds: { match: 0.4, margin: 0.08, pad: 0.8 }, device: { memoryMb: 210, battery: 0.8 }, recognitionModel: 'sface@2021dec', ...extra });
+    const t1 = trial('genuine'), t2 = trial('attack_print', { outcome: 'liveness_failed', identifiedEmployeeId: null, expectedEmployeeId: crypto.randomUUID() });
+    const before = (await sql`select count(*)::int n from public.attendance_events`)[0]!.n;
+    const { res } = await signedCall('trials', { trials: [t1, t2, { id: 'malo' }] }, kp.privateKey);
+    const j = await res.json();
+    assert(res.status === 200 && j.saved === 2 && j.rejected === 1, 'guardados: ' + JSON.stringify(j));
+    const rows = await sql`select condition, top1_score, total_ms, expected_employee_id from public.biometric_trials where session_id = ${session} order by condition`;
+    assert(rows.length === 2 && rows[1]!.condition === 'genuine' && Math.abs(Number(rows[1]!.top1_score) - 0.71) < 1e-6 && rows[1]!.total_ms === 2100, 'filas');
+    assert(rows[0]!.expected_employee_id === null, 'empleado ajeno a la organización descartado');
+    assert((await sql`select count(*)::int n from public.attendance_events`)[0]!.n === before, 'no crea asistencia');
+    const again = await signedCall('trials', { trials: [t1] }, kp.privateKey);
+    assert((await again.res.json()).saved === 0, 'idempotente');
+    const r = await call('trials', { trials: [t1] }, { 'x-device-id': DEV });
+    assert(r.status === 401, 'sin firma → 401');
   });
   await t.step('dispositivo bloqueado → sin desafío', async () => {
     await sql`update public.devices set status = 'blocked' where id = ${DEV}`;

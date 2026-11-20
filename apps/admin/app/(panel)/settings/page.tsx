@@ -10,7 +10,7 @@ const FIELDS: [keyof typeof DEFAULT_POLICY, string][] = [
   ['pauseMinMinutes', 'Pausa/almuerzo: mínimo (min)'], ['pauseMaxMinutes', 'Pausa/almuerzo: máximo (min); más es otra jornada'], ['longSessionHours', 'Permanencia larga: aviso (h)'],
   ['staleSessionHours', 'Sesión caducada: siguiente marca = ENTRADA (h)'], ['offlineMaxHours', 'Máx. horas sin sincronizar antes de bloquear (0 = no bloquear)'],
   ['leaseHours', 'Validez de autorización de empleados sin renovar (h)'], ['serverTimeStaleHours', 'Horas sin hora de servidor → hora dudosa'],
-  ['activeChallenge', 'Desafío activo de prueba de vida (1 = sí, recomendado; 0 = solo pasiva, menos seguro)'],
+  ['activeChallenge', 'Desafío de prueba de vida: 1 = parpadeo · 2 = aleatorio (parpadeo o giro, más robusto) · 0 = solo pasiva (menos seguro)'],
   ['challengeTimeoutSec', 'Segundos para completar el desafío (parpadeo/giro)'],
   ['maxFailedAttempts', 'Intentos fallidos antes de pausa'], ['cooldownSec', 'Pausa tras intentos fallidos (s)'], ['confirmationSec', 'Duración de la confirmación (s)'],
 ];

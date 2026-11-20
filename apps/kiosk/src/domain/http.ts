@@ -19,7 +19,7 @@ export class DeviceApi {
 
   activate(body: Record<string, string>) { return this.post('activate', JSON.stringify(body)); }
 
-  private async signed(route: 'push' | 'pull' | 'enroll-ticket', deviceId: string, privateKey: string, payload: unknown) {
+  private async signed(route: 'push' | 'pull' | 'enroll-ticket' | 'trials', deviceId: string, privateKey: string, payload: unknown) {
     const { challenge } = await this.post('challenge', JSON.stringify({ deviceId }));
     const body = JSON.stringify(payload);
     const signature = signRequest('POST', route, challenge, body, privateKey);
@@ -33,6 +33,11 @@ export class DeviceApi {
   /** Autorización de un solo uso para el modo enrolamiento (403 enroll_not_allowed si el teléfono no tiene permiso). */
   enrollTicket(deviceId: string, privateKey: string): Promise<{ ticket: string; expiresInSec: number }> {
     return this.signed('enroll-ticket', deviceId, privateKey, {});
+  }
+
+  /** Intentos del modo validación biométrica (sin imágenes). */
+  trials(deviceId: string, privateKey: string, trials: unknown[]): Promise<{ received: number; saved: number; rejected: number }> {
+    return this.signed('trials', deviceId, privateKey, { trials });
   }
 
   pull(deviceId: string, privateKey: string, knownEmployeeIds: string[]): Promise<SyncPullResponse & { policy: Record<string, number | null> | null }> {

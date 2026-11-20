@@ -201,6 +201,20 @@ await as('admin@e2e.test', async (page) => {
   }, page);
 });
 
+await as('admin@e2e.test', async (page) => {
+  await step('Admin cliente: validación biométrica con tasas, muestra e intervalos (sin porcentajes sueltos)', async () => {
+    await go(page, `/biometrics?org=${C1}`);
+    await expectText(page, 'Validación biométrica'); await expectText(page, 'EXPERIMENTAL');
+    const row = async (label) => (await page.locator('tr', { hasText: label }).first().locator('td').nth(1).textContent()).trim();
+    if (!(await row('FRR')).startsWith('1 de 3')) throw new Error('FRR: ' + await row('FRR'));
+    if (!(await row('FAR')).startsWith('0 de 1')) throw new Error('FAR: ' + await row('FAR'));
+    if (!(await row('BPCER')).startsWith('1 de 4')) throw new Error('BPCER: ' + await row('BPCER'));
+    await expectText(page, 'IC 95 %'); await expectText(page, '1000: 3.9');
+    await expectText(page, 'Tardía, Ana'); await expectNoText(page, 'NaN');
+    await shot(page, '12-validacion-biometrica');
+  }, page);
+});
+
 // ===================== Supervisora (sin permiso especial) =====================
 await as('sup@e2e.test', async (page) => {
   await step('Supervisora: ve el expediente de su tienda pero NO el motivo de la baja', async () => {
@@ -213,6 +227,9 @@ await as('sup@e2e.test', async (page) => {
     await go(page, `/employees/${CARLA}?org=${C1}`);
     await expectNoText(page, 'Norte, Carla'); await expectNoText(page, 'Carla Norte');
   }, page);
+  await step('Supervisora: no accede a la validación biométrica', async () => {
+    await go(page, `/biometrics?org=${C1}`); await expectText(page, 'Sin permiso para ver la validación biométrica');
+  }, page);
   await step('Supervisora: ve la alerta de su tienda', async () => {
     await go(page, `/alerts?org=${C1}&status=all`); await expectText(page, 'Tardía, Ana');
   }, page);
@@ -224,6 +241,9 @@ await as('aud@e2e.test', async (page) => {
     await go(page, `/employees/${BRUNO}?org=${C1}`);
     await expectText(page, 'Motivo reservado'); await expectNoText(page, REASON);
     await go(page, `/audit?org=${C1}`); await expectNoText(page, REASON);
+  }, page);
+  await step('Auditor: consulta la validación biométrica', async () => {
+    await go(page, `/biometrics?org=${C1}`); await expectText(page, 'Por tipo de ataque');
   }, page);
   await step('Auditor: solo lectura en horarios (sin formularios de carga)', async () => {
     await go(page, `/schedules?org=${C1}&store=${T1}`);

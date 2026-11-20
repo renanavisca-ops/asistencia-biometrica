@@ -13,3 +13,4 @@ export function getEngine(): Promise<FreeFaceRecognitionAdapter> {
   return ready;
 }
 export let initMs: number | null = null;
+export { runCapture, challengeModeFromPolicy, type CaptureOutcome, type CaptureMetrics } from './capture.ts';

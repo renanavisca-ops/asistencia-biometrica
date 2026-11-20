@@ -12,6 +12,8 @@ export interface DeviceDb {
   pull(deviceId: string, knownEmployeeIds: string[]): Promise<Record<string, unknown>>;
   /** Autorización de un solo uso para el modo enrolamiento (null si el teléfono no tiene permiso). */
   enrollTicket(deviceId: string): Promise<string | null>;
+  /** Intentos del modo validación biométrica (sin imágenes). Devuelve cuántos se guardaron (idempotente por id). */
+  ingestTrials(deviceId: string, trials: unknown[]): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -47,6 +49,10 @@ export function createDb(url: string): DeviceDb {
     async enrollTicket(id) {
       const [r] = await sql`select private.issue_enroll_ticket(${id}::uuid) as t`;
       return r!.t ?? null;
+    },
+    async ingestTrials(id, trials) {
+      const [r] = await sql`select private.ingest_biometric_trials(${id}::uuid, ${j(trials)}::jsonb) as n`;
+      return Number(r!.n ?? 0);
     },
     async close() {
       await sql.end();

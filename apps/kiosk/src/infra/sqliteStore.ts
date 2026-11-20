@@ -1,6 +1,6 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from '@capacitor-community/sqlite';
 import type { RosterEntry } from '@asistencia/core';
-import type { DeviceState, LocalEvent, LocalEventStatus, LocalStore, PendingBatch } from '../domain/store.ts';
+import type { DeviceState, LocalEvent, LocalEventStatus, LocalStore, PendingBatch, BiometricTrial } from '../domain/store.ts';
 
 const DB = 'asistencia_kiosk';
 const SCHEMA = `
@@ -102,6 +102,10 @@ export class SqliteStore implements LocalStore {
     await this.db.executeSet(acks.map((a) => ({ statement: 'update events set status = ?, reason = ? where id = ?', values: [a.status, a.reason, a.eventId] })), true);
   }
   getPendingBatch() { return this.kvGet<PendingBatch>('batch'); }
+  async getPendingTrials() { return (await this.kvGet<BiometricTrial[]>('pending_trials')) ?? []; }
+  async setPendingTrials(list: BiometricTrial[]) {
+    if (list.length) await this.kvSet('pending_trials', list); else await this.db.run(`delete from kv where k = 'pending_trials'`);
+  }
   async setPendingBatch(b: PendingBatch | null) {
     if (b) await this.kvSet('batch', b); else await this.db.run(`delete from kv where k = 'batch'`);
   }

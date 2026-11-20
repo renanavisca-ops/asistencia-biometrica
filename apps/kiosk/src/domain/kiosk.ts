@@ -6,7 +6,7 @@ import {
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { ApiError, type DeviceApi } from './http.ts';
 import type { Platform } from './platform.ts';
-import type { DeviceState, LocalEventStatus, LocalStore } from './store.ts';
+import type { DeviceState, LocalEventStatus, LocalStore, BiometricTrial } from './store.ts';
 
 /** Resultado del motor biométrico (real o simulado) para un empleado identificado. */
 export interface Identification {
@@ -251,6 +251,31 @@ export class KioskService {
     const c = await this.store.counts();
     await this.store.resetDevice();
     return { lostPending: c.pending };
+  }
+
+  /** Modo validación biométrica: guarda el intento localmente (cifrado) y lo envía cuando hay conexión. No crea asistencia. */
+  async recordTrial(t: BiometricTrial) {
+    const list = await this.store.getPendingTrials();
+    await this.store.setPendingTrials([...list, t].slice(-2000));
+  }
+
+  async sendTrials(): Promise<{ ok: true; sent: number; pending: number } | { ok: false; error: string; pending: number }> {
+    const st = await this.store.getState();
+    let list = await this.store.getPendingTrials();
+    if (!st || st.status !== 'active') return { ok: false, error: 'not_activated', pending: list.length };
+    let sent = 0;
+    try {
+      while (list.length) {
+        const chunk = list.slice(0, 100);
+        await this.api.trials(st.deviceId, st.privateKey, chunk);
+        sent += chunk.length;
+        list = list.slice(chunk.length);
+        await this.store.setPendingTrials(list);
+      }
+      return { ok: true, sent, pending: 0 };
+    } catch (e) {
+      return { ok: false, error: e instanceof ApiError ? e.code : 'network_error', pending: list.length };
+    }
   }
 
   async status() {

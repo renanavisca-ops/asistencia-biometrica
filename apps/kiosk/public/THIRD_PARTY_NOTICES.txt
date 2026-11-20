@@ -1,0 +1,16 @@
+Asistencia Tienda — avisos de componentes de terceros incluidos en la aplicación
+(ver docs/LICENCIAS_BIOMETRICAS.md en el repositorio)
+
+MediaPipe Face Landmarker (modelo face_landmarker.task) y @mediapipe/tasks-vision
+  Copyright Google LLC. Licencia Apache License 2.0 — https://www.apache.org/licenses/LICENSE-2.0
+
+ONNX Runtime Web (onnxruntime-web)
+  Copyright (c) Microsoft Corporation. Licencia MIT — https://github.com/microsoft/onnxruntime/blob/main/LICENSE
+
+SFace (face_recognition_sface_2021dec.onnx), OpenCV Zoo
+  Pesos publicados bajo Apache License 2.0. USO EXPERIMENTAL: procedencia de datos de entrenamiento no verificada.
+  https://github.com/opencv/opencv_zoo
+
+MiniFASNet V2 / V1SE (Silent-Face-Anti-Spoofing), Minivision AI
+  Código bajo Apache License 2.0; licencia de los pesos no explícita. USO EXPERIMENTAL.
+  Convertidos a ONNX por Asistencia Tienda. https://github.com/minivision-ai/Silent-Face-Anti-Spoofing

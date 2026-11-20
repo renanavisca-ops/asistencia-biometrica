@@ -39,6 +39,17 @@ export interface LocalEvent {
 
 export interface PendingBatch { batchId: string; eventIds: string[] }
 
+/** Intento del modo validación biométrica (ver ui/BiometricValidation.tsx). No contiene imágenes ni plantillas. */
+export interface BiometricTrial {
+  id: string; sessionId: string; capturedAt: string;
+  condition: 'genuine' | 'impostor' | 'attack_print' | 'attack_screen' | 'attack_video' | 'attack_other' | 'benchmark';
+  expectedEmployeeId: string | null; lighting: 'normal' | 'low' | 'backlight' | 'outdoor'; accessories: string | null;
+  challengeMode: 'none' | 'blink' | 'random'; outcome: string; outcomeReason: string | null; identifiedEmployeeId: string | null;
+  metrics: Record<string, unknown>; thresholds: { match: number; margin: number; pad: number };
+  device: Record<string, unknown>; recognitionModel: string | null; padModel: string | null; appVersion: string; notes: string | null;
+  benchmark?: Record<string, unknown>;
+}
+
 /**
  * Almacén local. Implementaciones: MemoryStore (pruebas) y SqliteStore (SQLCipher en el teléfono).
  * appendEvent debe ser atómico: el evento y el siguiente número de secuencia se guardan juntos o nada.
@@ -60,6 +71,9 @@ export interface LocalStore {
   counts(): Promise<Record<LocalEventStatus, number>>;
   /** Borra roster y plantillas (dispositivo bloqueado). Conserva la cola de eventos para auditoría. */
   wipeRoster(): Promise<void>;
+  /** Intentos del modo validación biométrica pendientes de enviar (sin imágenes). */
+  getPendingTrials(): Promise<BiometricTrial[]>;
+  setPendingTrials(list: BiometricTrial[]): Promise<void>;
   /** Deja el teléfono como recién instalado (para reactivarlo con un código nuevo). */
   resetDevice(): Promise<void>;
 }
@@ -69,6 +83,7 @@ export class MemoryStore implements LocalStore {
   roster: RosterEntry[] = [];
   events: LocalEvent[] = [];
   batch: PendingBatch | null = null;
+  trials: BiometricTrial[] = [];
   /** Permite simular un fallo a mitad de escritura en las pruebas. */
   failNextAppend = false;
 
@@ -109,5 +124,7 @@ export class MemoryStore implements LocalStore {
     return c;
   }
   async wipeRoster() { this.roster = []; }
-  async resetDevice() { this.state = null; this.roster = []; this.events = []; this.batch = null; }
+  async getPendingTrials() { return structuredClone(this.trials); }
+  async setPendingTrials(list: BiometricTrial[]) { this.trials = structuredClone(list); }
+  async resetDevice() { this.state = null; this.roster = []; this.events = []; this.batch = null; this.trials = []; }
 }

@@ -11,6 +11,7 @@ import { Camera } from './Camera.tsx';
 import { formatCode, normalizeCode } from './activationCode.ts';
 import { FaceCapture, type CaptureOutcome } from './FaceCapture.tsx';
 import { EngineDiagnostics } from './EngineDiagnostics.tsx';
+import { BiometricValidation } from './BiometricValidation.tsx';
 import { Enrollment } from './Enrollment.tsx';
 import { OrgSignup } from './OrgSignup.tsx';
 
@@ -41,6 +42,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
   const [syncInfo, setSyncInfo] = useState<string>('');
   const [admin, setAdmin] = useState(false);
   const [diag, setDiag] = useState(false);
+  const [validation, setValidation] = useState(false);
   const [enroll, setEnroll] = useState(false);
   const attempt = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -206,6 +208,7 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
       )}
       {footer}
       {diag && <EngineDiagnostics onClose={() => setDiag(false)} />}
+      {validation && st && <BiometricValidation svc={svc} roster={roster} policy={st.policy} onClose={() => setValidation(false)} />}
       {enroll && st && <Enrollment organizationId={st.organizationId} getTicket={() => svc.enrollTicket()} onClose={() => { setEnroll(false); runSync(); }} />}
       {admin && st && (
         <div className="overlay" role="dialog" aria-label="Estado del dispositivo">
@@ -218,11 +221,12 @@ export function KioskApp({ svc, persistent }: { svc: KioskService; persistent: b
             <tr><td>Aceptados / revisión / rechazados</td><td>{counts?.accepted ?? 0} / {counts?.needs_review ?? 0} / {counts?.rejected ?? 0}</td></tr>
             <tr><td>Personas autorizadas</td><td>{roster.length}</td></tr>
             <tr><td>Política</td><td>v{st.policy.version}</td></tr>
-            <tr><td>Motor biométrico</td><td>sface@2021dec + MiniFASNet + desafío activo (experimentales)</td></tr>
+            <tr><td>Motor biométrico</td><td>sface@2021dec + MiniFASNet + {st.policy.activeChallenge === 0 ? 'solo pasiva' : st.policy.activeChallenge === 2 ? 'desafío aleatorio' : 'parpadeo'} (experimentales)</td></tr>
             <tr><td>Dispositivo</td><td style={{ fontFamily: 'monospace', fontSize: 12 }}>{st.deviceId}</td></tr>
           </tbody></table>
           <button className="btn primary" onClick={runSync}>Sincronizar ahora</button>
           <button className="btn" onClick={() => { setAdmin(false); setDiag(true); }}>Diagnóstico del motor</button>
+          <button className="btn" onClick={() => { setAdmin(false); setValidation(true); }}>Validación biométrica (pruebas con personas)</button>
           {st.canEnroll
             ? <button className="btn" onClick={() => { setAdmin(false); setEnroll(true); }}>Enrolamiento (administrador)</button>
             : <p className="muted" style={{ fontSize: 14 }}>Este teléfono no tiene permiso de enrolamiento (se activa en el panel: Teléfonos → «Puede enrolar»; luego toque Sincronizar).</p>}

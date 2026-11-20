@@ -20,7 +20,7 @@ export const activationProofBytes = (code: string, publicKey: string) =>
 /**
  * API de dispositivos de tienda. Los dispositivos no tienen usuario de Supabase: se autentican con su clave Ed25519
  * (generada en el teléfono durante la activación) firmando un desafío de un solo uso emitido por el servidor.
- * Rutas: POST /device-api/{activate|challenge|push|pull|enroll-ticket}
+ * Rutas: POST /device-api/{activate|challenge|push|pull|enroll-ticket|trials}
  */
 export function createHandler(db: DeviceDb, log: (msg: string, extra?: unknown) => void = () => {}) {
   async function authenticate(req: Request, route: string, body: string): Promise<string | null> {
@@ -97,6 +97,18 @@ export function createHandler(db: DeviceDb, log: (msg: string, extra?: unknown) 
           const [deviceId] = auth.split('|') as [string, string];
           const ticket = await db.enrollTicket(deviceId);
           return ticket ? json(200, { ticket, expiresInSec: 900 }) : json(403, { error: 'enroll_not_allowed' });
+        }
+        case 'trials': {
+          // Modo validación biométrica: intentos medidos en el teléfono (sin imágenes ni plantillas). No crea asistencia.
+          const auth = await authenticate(req, 'trials', body);
+          if (!auth) return json(401, { error: 'unauthorized' });
+          const [deviceId] = auth.split('|') as [string, string];
+          const b = JSON.parse(body);
+          if (!Array.isArray(b.trials) || b.trials.length > 200) return json(400, { error: 'invalid_payload' });
+          const ok = b.trials.filter((t: Record<string, unknown>) => isUuid(t?.id) && isUuid(t?.sessionId) && typeof t?.condition === 'string'
+            && typeof t?.outcome === 'string' && typeof t?.capturedAt === 'string' && !Number.isNaN(Date.parse(t.capturedAt as string)));
+          const saved = await db.ingestTrials(deviceId, ok);
+          return json(200, { received: b.trials.length, saved, rejected: b.trials.length - ok.length });
         }
         default:
           return json(404, { error: 'not_found' });

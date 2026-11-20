@@ -65,6 +65,45 @@ await page.goto('http://127.0.0.1:5198/');
 await page.fill('input', 'face-2345-face'); await page.click('button:has-text("Activar")');
 await page.waitForSelector('text=Toque la pantalla', { timeout: 30000 }).catch(async (e) => { console.error('PANTALLA:', (await page.textContent('body'))?.slice(0, 600)); throw e; });
 await page.waitForTimeout(3000); // sincronización inicial (roster con plantillas)
+
+// VALIDATION=1: modo validación biométrica (misma cadena, sin asistencia). Intento 1: persona enrolada (solo pasiva: la
+// cámara simulada es una imagen fija y no puede parpadear). Intento 2: la misma imagen como «foto impresa» con desafío de
+// parpadeo → debe detenerla la prueba de vida. Los intentos se envían al servidor; no debe crearse ninguna marcación.
+if (process.env.VALIDATION) {
+  await page.locator('.footer').dispatchEvent('pointerdown'); await page.waitForTimeout(3300);
+  await page.click('text=Validación biométrica (pruebas con personas)');
+  const result = () => Promise.race(['Reconocido', 'No reconocido', 'Prueba de vida no superada', 'Tiempo agotado', 'Dudoso', 'Sin calibrar']
+    .map((t) => page.waitForSelector(`b:text-is("${t}"), b:text-matches("^${t}:")`, { timeout: 60000 }).then(async (h) => (await h.textContent()).trim())));
+  await page.getByLabel('Condición').selectOption('genuine');
+  const who = page.getByLabel('¿Quién está frente a la cámara?');
+  const alfa = (await who.locator('option').allTextContents()).find((t) => t.startsWith('Persona A'));
+  await who.selectOption({ label: alfa });
+  await page.getByLabel('Prueba de vida').selectOption('none');
+  let ts = Date.now(); await page.click('text=Iniciar intento');
+  const r1 = await result(), ms1 = Date.now() - ts;
+  const detail1 = (await page.textContent('p.muted >> text=/Mejor candidato/')).replace(/\s+/g, ' ');
+  await page.getByLabel('Condición').selectOption('attack_print');
+  await page.getByLabel('Prueba de vida').selectOption('blink');
+  ts = Date.now(); await page.click('text=Iniciar intento');
+  const r2 = await result(), ms2 = Date.now() - ts;
+  await page.click('text=Medir 1:N');
+  await page.waitForSelector('text=/1:N \\(ms por búsqueda/', { timeout: 60000 });
+  const bench = (await page.textContent('text=/1:N \\(ms por búsqueda/')).trim();
+  await page.click('text=/Enviar resultados/');
+  await page.waitForSelector('text=/Enviados 3 intentos/', { timeout: 30000 });
+  await page.screenshot({ path: process.env.SHOT ?? 'face-e2e-validation.png' });
+  const rows = await sql`select condition, outcome, outcome_reason, top1_score, passive_score, total_ms, challenge_mode, expected_employee_id = ${A} as expected_ok,
+    identified_employee_id = ${A} as identified_ok from public.biometric_trials where organization_id = ${ORG} order by received_at, condition`;
+  const [{ n }] = await sql`select count(*)::int n from public.attendance_events where organization_id = ${ORG}`;
+  await browser.close(); await new Promise((r) => server.httpServer.close(r)); await sql.end();
+  console.log(JSON.stringify({ r1, ms1, detail1, r2, ms2, bench, rows, attendanceEvents: n }, null, 1));
+  const g = rows.find((x) => x.condition === 'genuine'), a = rows.find((x) => x.condition === 'attack_print'), b = rows.find((x) => x.condition === 'benchmark');
+  const ok = r1.startsWith('Reconocido: Persona') && r2 === 'Prueba de vida no superada' && g?.outcome === 'identified' && g.expected_ok && g.identified_ok
+    && a?.outcome === 'liveness_failed' && a.outcome_reason === 'challenge_timeout' && !!b && n === 0;
+  console.log(ok ? `OK: modo validación — persona enrolada reconocida (${g.top1_score.toFixed(3)}), foto estática detenida por el desafío, 1:N medido, 3 intentos guardados y 0 marcaciones`
+    : 'FALLO: modo validación');
+  process.exit(ok ? 0 : 1);
+}
 const t0 = Date.now();
 await page.click('text=Toque la pantalla');
 // La instrucción del desafío debe llegar a pintarse en pantalla (antes el bucle bloqueaba el repintado).

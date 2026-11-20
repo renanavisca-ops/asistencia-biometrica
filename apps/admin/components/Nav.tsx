@@ -9,7 +9,7 @@ export type CtxOption = { id: string; name: string; kind: 'member' | 'support'; 
 const ORG_LINKS: [string, string][] = [
   ['/', 'Inicio'], ['/attendance', 'Asistencia'], ['/incidents', 'Incidencias'], ['/employees', 'Empleados'],
   ['/schedules', 'Horarios'], ['/alerts', 'Alertas'], ['/discipline', 'Disciplina'], ['/reports', 'Reportes'],
-  ['/organizations', 'Sucursales'], ['/devices', 'Teléfonos'], ['/settings', 'Política offline'],
+  ['/organizations', 'Sucursales'], ['/devices', 'Teléfonos'], ['/biometrics', 'Validación biométrica'], ['/settings', 'Política offline'],
   ['/admins', 'Administradores y permisos'], ['/privacy', 'Privacidad y cuenta'], ['/audit', 'Auditoría'],
 ];
 /** Menú de la plataforma (el negocio: organizaciones, planes, crecimiento). */

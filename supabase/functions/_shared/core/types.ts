@@ -57,7 +57,7 @@ export interface DevicePolicy {
   matchMargin: number;
   /** Umbral mínimo de puntuación PAD (prueba de vida) del modelo activo. */
   padThreshold: number;
-  /** 1 = exigir desafío activo aleatorio (parpadeo/giro) además de la prueba pasiva; 0 = solo pasiva (seguridad reducida). */
+  /** Desafío activo además de la prueba pasiva: 1 = parpadeo; 2 = aleatorio (parpadeo o giro); 0 = solo pasiva (seguridad reducida). */
   activeChallenge: number;
   /** Segundos para completar el desafío activo. */
   challengeTimeoutSec: number;

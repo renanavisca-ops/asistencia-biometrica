@@ -121,7 +121,9 @@ function Mfa({ sb, factorId, setErr, onOk }: { sb: SupabaseClient; factorId: str
       if (error) return setErr('Código incorrecto o caducado.');
       onOk();
     }}>
-      <p>Código de su app de autenticación</p>
+      <p style={{ margin: 0 }}>Código de 6 números de su <b>app de autenticación</b></p>
+      <p className="muted" style={{ fontSize: 14, margin: 0 }}>Es el mismo que le pide el panel web al entrar (Google Authenticator, Microsoft Authenticator…).
+        Cambia cada 30 segundos. <b>No</b> es el código de activación del teléfono.</p>
       <input name="code" inputMode="numeric" pattern="[0-9 ]*" maxLength={7} required autoComplete="one-time-code" autoCorrect="off" spellCheck={false} />
       <button className="btn primary">Verificar</button>
     </form>

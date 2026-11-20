@@ -11,6 +11,8 @@ export function IssueCode({ deviceId, label, status }: { deviceId: string; label
         <div>
           <div className="code-once">{state.code}</div>
           <div className="muted">Válido 30 min, un solo uso. Introdúzcalo en la app de “{label}”. No se volverá a mostrar.</div>
+          {status === 'active' && <div className="muted" style={{ marginTop: 4 }}>Solo sirve para <b>reinstalar</b> la app en ese teléfono. <b>No</b> es para enrolar:
+            el enrolamiento pide el código de 6 números de la app de autenticación del administrador.</div>}
         </div>
       ) : (
         <>

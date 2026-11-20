@@ -9,7 +9,7 @@ type Month = { month: string; new_orgs: number; total_orgs: number; active_orgs:
 /** Resumen de la plataforma como negocio: solo cifras agregadas (sin datos laborales ni biométricos). */
 export default async function PlatformHome({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const { supabase, isSuper } = await getContext();
+  const { supabase, isSuper, contexts } = await getContext();
   if (!isSuper) return <p>Esta área es exclusiva del propietario de la plataforma.</p>;
   const [{ data: orgs, error }, { data: growth }] = await Promise.all([supabase.rpc('platform_orgs'), supabase.rpc('platform_growth', { p_months: 12 })]);
   const rows = (orgs ?? []) as Org[];
@@ -28,6 +28,16 @@ export default async function PlatformHome({ searchParams }: { searchParams: SP 
     <>
       <h2>Resumen de la plataforma</h2>
       <Flash sp={sp} />
+      {!contexts.some((c) => c.kind === 'member') && (
+        <div className="card" style={{ borderColor: '#c4b5fd' }}>
+          <b>¿Busca Empleados, Horarios, Alertas o Reportes?</b> Esas opciones están dentro de cada organización, no en la plataforma.
+          Su cuenta todavía no administra ninguna. Para tenerlas en el selector del menú:
+          <ul style={{ margin: '6px 0 0' }}>
+            <li>Si la empresa ya existe (p. ej. registrada desde la app): el administrador de esa organización le invita en <i>Administradores</i> con su correo, como Administrador central.</li>
+            <li>Si es una empresa nueva suya: créela en <Link href="/platform/organizations">Organizaciones</Link> → «Mi propia organización».</li>
+          </ul>
+        </div>
+      )}
       {error && <div className="msg error">{error.message}</div>}
       <div className="grid">
         <div className="card kpi"><b>{k.total}</b><span>Organizaciones ({k.signup} por registro en la app)</span></div>

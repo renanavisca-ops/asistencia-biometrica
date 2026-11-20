@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { getContext } from '@/lib/context';
 import { ago } from '@/lib/format';
 import type { SP } from '@/components/Flash';
@@ -8,6 +9,8 @@ import { HrKpis } from '@/components/HrKpis';
 export default async function Home({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const { supabase, org, isSuper, can } = await getContext(sp.org);
+  // El dueño de la plataforma sin organización propia entra directamente a su área (no a una página vacía).
+  if (!org && isSuper) redirect('/platform');
   if (!org) {
     return (
       <div className="card">
